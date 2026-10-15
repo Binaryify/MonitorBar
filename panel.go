@@ -35,7 +35,13 @@ type panel struct {
 
 func (p *panel) view(c *ui.Context) {
 	c.SetTheme(darkTheme)
-	c.Root().Background(ui.Transparent)
+	if runtime.GOOS == "windows" {
+		// An opaque root lets text use ClearType: subpixel glyphs need a
+		// solid background. Windows 11 rounds and outlines the flyout itself.
+		c.Root().Background(panelBottom)
+	} else {
+		c.Root().Background(ui.Transparent) // the arrow and the rounded corners show the desktop
+	}
 	shell := ui.Column(c).Width(panelWidth).TextColor(ink).FontSize(12)
 	shell.Children(func() {
 		if runtime.GOOS == "darwin" {
@@ -129,14 +135,12 @@ func (p *panel) caption() string {
 	if p.s.monitor.Connection != "" {
 		parts = append(parts, p.s.monitor.Connection)
 	}
-	widest, fastest := 0, 0
+	fastest := 0
 	for _, m := range p.s.modes {
-		widest, fastest = max(widest, m.PixelWidth), max(fastest, m.RefreshRate)
+		fastest = max(fastest, m.RefreshRate)
 	}
-	if widest >= 3840 {
-		parts = append(parts, "4K")
-	} else if widest > 0 {
-		parts = append(parts, strconv.Itoa(widest)+"p")
+	if label := display.SizeLabel(p.s.monitor.NativeSize(p.s.modes, p.s.current)); label != "" {
+		parts = append(parts, label)
 	}
 	if fastest > 0 {
 		parts = append(parts, strconv.Itoa(fastest)+"Hz")

@@ -18,7 +18,44 @@ var ErrGammaLimited = errors.New("display: the system limited the dimming")
 type Monitor struct {
 	Name       string // e.g. "Mi Monitor"
 	Connection string // e.g. "HDMI", or "" when unknown
-	handle     handle
+	// Native is the panel's own resolution where the system tells it
+	// (Windows, from the EDID), zero otherwise.
+	NativeWidth, NativeHeight int
+	handle                    handle
+}
+
+// NativeSize is the monitor's own resolution: what the system reports, or
+// the largest mode drawn 1:1, as HiDPI modes draw more pixels than the
+// panel has. A reported size smaller than the current mode is not trusted
+// (virtual displays of remote desktops report one): the current mode wins.
+func (m Monitor) NativeSize(modes []Mode, current Mode) (w, h int) {
+	w, h = m.NativeWidth, m.NativeHeight
+	if w == 0 {
+		for _, mode := range modes {
+			if !mode.HiDPI() && mode.PixelWidth > w {
+				w, h = mode.PixelWidth, mode.PixelHeight
+			}
+		}
+	}
+	if !current.HiDPI() && current.PixelWidth > w {
+		w, h = current.PixelWidth, current.PixelHeight
+	}
+	return w, h
+}
+
+// SizeLabel names a resolution the way monitors are sold: "4K", "2K".
+func SizeLabel(w, h int) string {
+	switch {
+	case w >= 5120:
+		return "5K"
+	case w >= 3840:
+		return "4K"
+	case h >= 1440:
+		return "2K"
+	case h > 0:
+		return fmt.Sprintf("%dp", h)
+	}
+	return ""
 }
 
 // Mode is a resolution and refresh rate the monitor can show.

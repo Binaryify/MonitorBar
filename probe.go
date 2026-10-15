@@ -19,7 +19,11 @@ func probe() {
 		}
 		fmt.Printf("当前模式: %s%s %dHz\n", mode.Title(), hidpi, mode.RefreshRate)
 	}
-	fmt.Printf("可用模式: %d 个  亮屏: %v  空闲: %.0f 秒\n", len(m.Modes()), !m.Asleep(), display.IdleSeconds())
+	modes := m.Modes()
+	current, _ := m.CurrentMode()
+	w, h := m.NativeSize(modes, current)
+	fmt.Printf("原生分辨率: %d × %d（%s）\n", w, h, display.SizeLabel(w, h))
+	fmt.Printf("可用模式: %d 个  亮屏: %v  空闲: %.0f 秒\n", len(modes), !m.Asleep(), display.IdleSeconds())
 
 	start := time.Now()
 	host, err := mitv.Discover()

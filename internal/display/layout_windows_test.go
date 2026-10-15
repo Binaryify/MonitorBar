@@ -12,10 +12,11 @@ func TestStructSizes(t *testing.T) {
 	for name, got := range map[string]uintptr{
 		"DEVMODEW": unsafe.Sizeof(devMode{}), "DISPLAY_DEVICEW": unsafe.Sizeof(displayDevice{}),
 		"DISPLAYCONFIG_PATH_INFO": unsafe.Sizeof(pathInfo{}), "DISPLAYCONFIG_SOURCE_DEVICE_NAME": unsafe.Sizeof(sourceDeviceName{}),
-		"DISPLAYCONFIG_TARGET_DEVICE_NAME": unsafe.Sizeof(targetDeviceName{}),
+		"DISPLAYCONFIG_TARGET_DEVICE_NAME":    unsafe.Sizeof(targetDeviceName{}),
+		"DISPLAYCONFIG_TARGET_PREFERRED_MODE": unsafe.Sizeof(targetPreferredMode{}),
 	} {
 		want := map[string]uintptr{"DEVMODEW": 220, "DISPLAY_DEVICEW": 840, "DISPLAYCONFIG_PATH_INFO": 72,
-			"DISPLAYCONFIG_SOURCE_DEVICE_NAME": 84, "DISPLAYCONFIG_TARGET_DEVICE_NAME": 420}[name]
+			"DISPLAYCONFIG_SOURCE_DEVICE_NAME": 84, "DISPLAYCONFIG_TARGET_DEVICE_NAME": 420, "DISPLAYCONFIG_TARGET_PREFERRED_MODE": 80}[name]
 		if got != want {
 			t.Errorf("%s is %d bytes, want %d", name, got, want)
 		}
