@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -29,7 +30,10 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 		link:     mitv.New("192.0.2.1"),
 		inputs:   []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 		volume:   80, hasVolume: true, deviceVolume: 80,
+		now: func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
+	s.prefs.DayScene, s.prefs.NightScene = "日间", "夜间"
+	s.dayStart, s.nightStart = parseClock("07:00", 0), parseClock("19:00", 0)
 	for _, rate := range []int{160, 144, 120, 60} {
 		for _, w := range []int{3360, 3200, 2560, 1920, 1600, 1280} {
 			s.modes = append(s.modes, display.Mode{Width: w, Height: w * 9 / 16, PixelWidth: 2 * w, PixelHeight: w * 9 / 8, RefreshRate: rate})
@@ -152,6 +156,42 @@ func TestDDCOnly(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("对比度") || !tt.HasText("硬件 · DDC/CI") {
 		t.Errorf("picture: missing the contrast control in %q", tt.Texts())
+	}
+}
+
+// Turning the switch on applies the current period's scene; a manual
+// change stays until the next switch, which applies the other scene.
+func TestAutoSwitch(t *testing.T) {
+	p, gamma := testPanel(t)
+	s := p.s
+	now := time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local)
+	s.now = func() time.Time { return now }
+	tt := newTester(p)
+	if err := tt.Click("画面"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("启用自动切换"); err != nil { // the switch, by its label
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !s.prefs.AutoSwitch || s.prefs.SoftBrightness != 80 || s.prefs.AutoPeriod != "day" {
+		t.Fatalf("after turning on at noon: on %v, brightness %v, period %q", s.prefs.AutoSwitch, s.prefs.SoftBrightness, s.prefs.AutoPeriod)
+	}
+	if !tt.HasText("现在是白天，19:00 切换到「夜间」") {
+		t.Errorf("status missing in %q", tt.Texts())
+	}
+
+	s.setSoftBrightness(65) // a manual change
+	now = now.Add(time.Hour)
+	s.autoCheck()
+	if s.prefs.SoftBrightness != 65 {
+		t.Errorf("a check within the day undid the manual change: %v", s.prefs.SoftBrightness)
+	}
+
+	now = time.Date(2026, 10, 15, 19, 0, 30, 0, time.Local)
+	s.autoCheck()
+	if s.prefs.SoftBrightness != 30 || s.prefs.Warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
+		t.Errorf("at 19:00: brightness %v warmth %v gamma %v, want the night scene", s.prefs.SoftBrightness, s.prefs.Warmth, *gamma)
 	}
 }
 

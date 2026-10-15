@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/binaryify/MonitorBar/internal/display"
 	"github.com/binaryify/MonitorBar/internal/mitv"
+	"github.com/binaryify/MonitorBar/internal/schedule"
 	"github.com/binaryify/MonitorBar/internal/usage"
 )
 
@@ -69,6 +71,10 @@ type store struct {
 	ddcVolume     bool
 	controls      []control
 	maxima        map[byte]int // the range of each VCP code
+
+	// The day and night start times as the time inputs edit them.
+	dayStart, nightStart time.Time
+	now                  func() time.Time // the clock, fixed in tests
 }
 
 // control is a picture setting the monitor offers over DDC/CI.
@@ -93,8 +99,10 @@ func newStore() *store {
 		prefs:         loadSettings(),
 		tracker:       usage.Open(filepath.Join(dataDir(), "usage.json")),
 		redraw:        func() {},
+		now:           time.Now,
 		launchAtLogin: mygo.App.OpenAtLogin(),
 	}
+	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
 	s.setGamma = func(b, w float64) error { return s.monitor.SetGamma(b, w) }
 	s.applyGamma()
@@ -451,6 +459,62 @@ func (s *store) setControl(i int) {
 	}
 }
 
+// MARK: Day and night
+
+// autoCheck applies the day or night scene when the period changed since
+// the last one applied, so manual changes stay until the next switch.
+func (s *store) autoCheck() {
+	if !s.prefs.AutoSwitch {
+		return
+	}
+	period, _ := s.autoTimes().At(s.now())
+	if string(period) == s.prefs.AutoPeriod {
+		return
+	}
+	name := s.prefs.DayScene
+	if period == schedule.Night {
+		name = s.prefs.NightScene
+	}
+	for _, sc := range scenes {
+		if sc.name == name {
+			s.apply(sc)
+		}
+	}
+	s.prefs.AutoPeriod, s.dirty = string(period), true
+}
+
+// autoChanged takes new settings: the current period's scene applies now.
+func (s *store) autoChanged() {
+	s.prefs.DayStart, s.prefs.NightStart = s.dayStart.Format("15:04"), s.nightStart.Format("15:04")
+	s.prefs.AutoPeriod, s.dirty = "", true
+	s.autoCheck()
+}
+
+func (s *store) autoTimes() schedule.Times {
+	return schedule.Times{
+		DayStart:   s.dayStart.Hour()*60 + s.dayStart.Minute(),
+		NightStart: s.nightStart.Hour()*60 + s.nightStart.Minute(),
+	}
+}
+
+// autoStatus says what is on and what comes next.
+func (s *store) autoStatus() string {
+	period, next := s.autoTimes().At(s.now())
+	if period == schedule.Day {
+		return fmt.Sprintf("现在是白天，%s 切换到「%s」", next.Format("15:04"), s.prefs.NightScene)
+	}
+	return fmt.Sprintf("现在是夜晚，%s 切换到「%s」", next.Format("15:04"), s.prefs.DayScene)
+}
+
+// parseClock reads "15:04" into a time of day, or the fallback minutes.
+func parseClock(text string, fallback int) time.Time {
+	t, err := time.Parse("15:04", text)
+	if err != nil {
+		t = time.Date(0, 1, 1, fallback/60, fallback%60, 0, 0, time.UTC)
+	}
+	return t
+}
+
 // MARK: Display modes
 
 func (s *store) applyMode(m display.Mode) {
@@ -506,6 +570,7 @@ func (s *store) detect() {
 func (s *store) detectingAny() bool { return s.detecting || s.probingDDC }
 
 func (s *store) recordUsage() {
+	s.autoCheck()
 	s.tracker.Record(!s.monitor.Asleep(), time.Duration(display.IdleSeconds()*float64(time.Second)))
 	s.usage = s.tracker.Recent(7)
 	s.save()

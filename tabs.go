@@ -119,6 +119,7 @@ func (p *panel) scenes(c *ui.Context) {
 func (p *panel) picture(c *ui.Context) {
 	s := p.s
 	p.scenes(c)
+	p.autoSwitch(c)
 	if (sliderCard{key: "soft", title: "软件调光", caption: "在硬件亮度基础上再压暗，适合夜间", icon: "contrast",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
 		s.applyGamma()
@@ -149,6 +150,44 @@ func (p *panel) picture(c *ui.Context) {
 	if reset.Clicked() {
 		s.resetSoftware()
 	}
+}
+
+// autoSwitch is the card that switches to the day and night scenes at set
+// times.
+func (p *panel) autoSwitch(c *ui.Context) {
+	s := p.s
+	names := make([]string, len(scenes))
+	for i, sc := range scenes {
+		names[i] = sc.name
+	}
+	card(c, func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			icon(c, "clock").FontSize(13)
+			ui.Text(c, "自动切换").FontSize(12).FontWeight(600).Grow(1)
+			if ui.Switch(c.Key("auto"), &s.prefs.AutoSwitch).Label("启用自动切换").Changed() {
+				s.autoChanged()
+			}
+		})
+		if !s.prefs.AutoSwitch {
+			ui.Text(c, "按时间在白天和夜晚的场景之间切换").FontSize(10).TextColor(muted)
+			return
+		}
+		row := func(key, label string, at *time.Time, scene *string) {
+			ui.Row(c.Key(key)).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, label).FontSize(11).Width(56)
+				if ui.TimeInput(c.Key(key+"-time"), at).Label(label + "开始").Changed() {
+					s.autoChanged()
+				}
+				ui.Spacer(c)
+				if ui.Select(c.Key(key+"-scene"), scene, names).Label(label + "场景").Width(96).Changed() {
+					s.autoChanged()
+				}
+			})
+		}
+		row("day", "白天", &s.dayStart, &s.prefs.DayScene)
+		row("night", "夜晚", &s.nightStart, &s.prefs.NightScene)
+		ui.Text(c, s.autoStatus()).FontSize(10).TextColor(muted)
+	})
 }
 
 // MARK: 分辨率

@@ -81,6 +81,7 @@ func (a *app) ready(show bool) {
 	})
 
 	a.s.detect()
+	a.s.autoCheck()
 	// Open the panel on the first launch (or with --show) so new users find the icon.
 	if show || !a.s.prefs.LaunchedBefore {
 		a.s.prefs.LaunchedBefore, a.s.dirty = true, true
