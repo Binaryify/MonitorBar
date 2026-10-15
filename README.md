@@ -77,6 +77,12 @@ MONITORBAR_SNAPSHOTS=docs/screenshots go test -run TestSnapshots .   # 重新生
 go tool mygo build -platform darwin/universal,windows/amd64          # 打包两端（可在 Mac 上交叉编译 Windows 版）
 ```
 
+发布：推送版本标签，CI 会打包 macOS dmg 与 Windows zip 并创建 GitHub Release。
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
 | 路径 | 职责 |
 | --- | --- |
 | `main.go` / `app.go` | 入口、托盘图标、弹出面板的尺寸与位置 |

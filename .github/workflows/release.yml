@@ -1,0 +1,41 @@
+name: Release
+
+# Push a version tag to publish a release:
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: Set the version from the tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          jq --arg v "$VERSION" '.version = $v' mygo.json > mygo.tmp && mv mygo.tmp mygo.json
+      - name: Build
+        run: go tool mygo build -platform darwin/universal,windows/amd64
+      - name: Package
+        run: |
+          mkdir dist
+          cp "build/darwin-universal/MonitorBar $VERSION.dmg" "dist/MonitorBar-$VERSION-macos-universal.dmg"
+          (cd build/windows-amd64 && zip -q -r "../../dist/MonitorBar-$VERSION-windows-amd64.zip" .)
+          ls -l dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "MonitorBar $VERSION" \
+            --generate-notes
