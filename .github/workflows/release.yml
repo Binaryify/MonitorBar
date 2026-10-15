@@ -25,12 +25,19 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           jq --arg v "$VERSION" '.version = $v' mygo.json > mygo.tmp && mv mygo.tmp mygo.json
       - name: Build
+        # The secret signs the updates that installed apps download.
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: go tool mygo build -platform darwin/universal,windows/amd64
       - name: Package
         run: |
           mkdir dist
           cp "build/darwin-universal/MonitorBar $VERSION.dmg" "dist/MonitorBar-$VERSION-macos-universal.dmg"
-          (cd build/windows-amd64 && zip -q -r "../../dist/MonitorBar-$VERSION-windows-amd64.zip" .)
+          (cd build/windows-amd64 && zip -q -r "../../dist/MonitorBar-$VERSION-windows-amd64.zip" MonitorBar.exe icon.png)
+          # The updates keep their names: the manifests point at them.
+          cp build/*/monitorbar-*.tar.gz build/*/update-*.json dist/
+          cp build/*/*.delta dist/ 2>/dev/null || true
           ls -l dist
       - name: Publish
         env:

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -75,6 +76,12 @@ type store struct {
 	// The day and night start times as the time inputs edit them.
 	dayStart, nightStart time.Time
 	now                  func() time.Time // the clock, fixed in tests
+
+	// Updates, for builds that can update themselves.
+	canUpdate  bool
+	update     *mygo.Update // a newer version, nil when up to date
+	installing bool
+	progress   int // percent downloaded
 }
 
 // control is a picture setting the monitor offers over DDC/CI.
@@ -101,6 +108,7 @@ func newStore() *store {
 		redraw:        func() {},
 		now:           time.Now,
 		launchAtLogin: mygo.App.OpenAtLogin(),
+		canUpdate:     mygo.Updater.Enabled(),
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
@@ -514,6 +522,65 @@ func parseClock(text string, fallback int) time.Time {
 		t = time.Date(0, 1, 1, fallback/60, fallback%60, 0, 0, time.UTC)
 	}
 	return t
+}
+
+// MARK: Updates
+
+// checkUpdate asks the releases for a newer version, in the background;
+// manual checks also tell when there is none.
+func (s *store) checkUpdate(manual bool) {
+	if !s.canUpdate || s.installing {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		up, err := mygo.Updater.Check(ctx)
+		s.post(func() {
+			if err == nil {
+				s.update = up
+			}
+			switch {
+			case !manual:
+			case err != nil:
+				s.notice = "检查更新失败：网络不通或 GitHub 无法访问"
+			case up == nil:
+				s.notice = "已是最新版本 " + mygo.App.Version()
+			}
+		})
+	}()
+}
+
+// installUpdate downloads the update, checks its signature, replaces the
+// app and starts the new version.
+func (s *store) installUpdate() {
+	up := s.update
+	if up == nil || s.installing {
+		return
+	}
+	s.installing, s.progress, s.notice = true, 0, ""
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		shown := -1
+		err := up.Install(ctx, func(done, total int64) {
+			if total <= 0 {
+				return
+			}
+			if p := int(done * 100 / total); p != shown {
+				shown = p
+				s.post(func() { s.progress = p })
+			}
+		})
+		s.post(func() {
+			if err != nil {
+				s.installing, s.notice = false, "更新失败，请稍后再试或从 GitHub 下载"
+				return
+			}
+			s.save()
+			mygo.App.Relaunch()
+		})
+	}()
 }
 
 // MARK: Display modes

@@ -34,6 +34,7 @@ MonitorBar 只在 REDMI 显示器 G Pro 27U 2026 上测试过，不保证在你�
 - **支持 DDC/CI 的显示器**：自动用 DDC/CI 调硬件背光，切换输入源、调音量，并显示对比度、锐度、RGB 增益等显示器回应的设置。
 - **软件调光与色温**通过显卡的 Gamma 表实现，任何连接线、任何显示器都能用。
 - **自动切换**：在「画面」里打开后，到了设定的白天、夜晚开始时间就自动切换到对应场景（默认 07:00「日间」、19:00「夜间」，场景可选）。只在时段交替时切换，中途的手动调整会保留到下一次交替。
+- **自动更新**：定期检查 GitHub 上的新版本，在面板底部提示，一键下载并重启；更新包经签名校验，只下载变化的部分。
 - 显示器不支持的功能不会出现在界面上。
 - 单个可执行文件，无 webview，空闲时不占 CPU；中文界面，深色主题。
 
@@ -52,6 +53,7 @@ MonitorBar 只在 REDMI 显示器 G Pro 27U 2026 上测试过，不保证在你�
 MonitorBar --show                 # 启动并打开面板（程序已运行时，再次启动也会打开面板）
 MonitorBar --probe                # 打印显示器、接口、分辨率、DDC/CI 读数和局域网发现结果
 MonitorBar --open-at-login on     # 开机自启（off 关闭）
+MonitorBar --update               # 检查并安装新版本
 ```
 
 ## 工作原理
@@ -91,7 +93,7 @@ MONITORBAR_SNAPSHOTS=docs/screenshots go test -run TestSnapshots .   # 重新生
 go tool mygo build -platform darwin/universal,windows/amd64          # 打包两端（可在 Mac 上交叉编译 Windows 版）
 ```
 
-发布：推送版本标签，CI 会打包 macOS dmg 与 Windows zip 并创建 GitHub Release。
+发布：先在 `CHANGELOG.md` 写好这个版本的说明（应用内的更新提示会显示它），再推送版本标签。CI 会用仓库 Secret `MYGO_UPDATER_PRIVATE_KEY` 签名，打包 macOS dmg、Windows zip 与更新包，并创建 GitHub Release。
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0

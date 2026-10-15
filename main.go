@@ -6,13 +6,16 @@
 //	MonitorBar --show    run and open the panel
 //	MonitorBar --probe   print what it can see and control, then exit
 //	MonitorBar --open-at-login on|off   start at login or not, then exit
+//	MonitorBar --update  install a newer version if there is one, then exit
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/egoist/mygo"
 )
@@ -25,6 +28,10 @@ func main() {
 	mygo.App.SetName("MonitorBar")
 	if i := slices.Index(os.Args, "--open-at-login"); i > 0 && i+1 < len(os.Args) {
 		setOpenAtLogin(os.Args[i+1] == "on")
+		return
+	}
+	if slices.Contains(os.Args[1:], "--update") {
+		update()
 		return
 	}
 	if !mygo.App.RequestSingleInstanceLock() {
@@ -54,4 +61,37 @@ func setOpenAtLogin(on bool) {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// update is a command: it installs a newer version, which runs from the
+// next launch.
+func update() {
+	if !mygo.Updater.Enabled() {
+		fmt.Println("这个版本不能自动更新（开发版本，或安装目录不可写）")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	up, err := mygo.Updater.Check(ctx)
+	switch {
+	case err != nil:
+		fmt.Println("检查更新失败:", err)
+		os.Exit(1)
+	case up == nil:
+		fmt.Println("已是最新版本", mygo.App.Version())
+		return
+	}
+	fmt.Printf("正在从 %s 更新到 %s…\n", mygo.App.Version(), up.Version)
+	shown := -1
+	err = up.Install(ctx, func(done, total int64) {
+		if p := int(done * 100 / max(total, 1)); p/10 != shown/10 {
+			shown = p
+			fmt.Printf("  %d%%\n", p)
+		}
+	})
+	if err != nil {
+		fmt.Println("更新失败:", err)
+		os.Exit(1)
+	}
+	fmt.Println("已更新到", up.Version, "，重新打开 MonitorBar 生效")
 }

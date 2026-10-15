@@ -82,6 +82,13 @@ func (a *app) ready(show bool) {
 
 	a.s.detect()
 	a.s.autoCheck()
+	go func() { // a newer version: soon after launch, then every few hours
+		time.Sleep(10 * time.Second)
+		for {
+			mygo.RunOnMain(func() { a.s.checkUpdate(false) })
+			time.Sleep(6 * time.Hour)
+		}
+	}()
 	// Open the panel on the first launch (or with --show) so new users find the icon.
 	if show || !a.s.prefs.LaunchedBefore {
 		a.s.prefs.LaunchedBefore, a.s.dirty = true, true

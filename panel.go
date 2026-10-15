@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
@@ -55,6 +56,7 @@ func (p *panel) view(c *ui.Context) {
 			p.header(c)
 			p.tabs(c)
 			p.content(c)
+			p.updateBar(c)
 			p.footer(c)
 		})
 	})
@@ -111,6 +113,9 @@ func (p *panel) header(c *ui.Context) {
 			}
 			if m.Item("登录时启动").Checked(s.launchAtLogin).Chosen() {
 				s.toggleLaunchAtLogin()
+			}
+			if s.canUpdate && m.Item("检查更新").Chosen() {
+				s.checkUpdate(true)
 			}
 			m.Separator()
 			if m.Item("退出 MonitorBar").Chosen() {
@@ -195,6 +200,28 @@ func (p *panel) content(c *ui.Context) {
 		if h := inner.Bounds().H; h > 0 && h != p.contentHeight {
 			p.contentHeight, p.settle = h, 3
 			c.Invalidate()
+		}
+	})
+}
+
+// updateBar offers a newer version, when there is one.
+func (p *panel) updateBar(c *ui.Context) {
+	s := p.s
+	if s.update == nil {
+		return
+	}
+	ui.Row(c).Gap(8).Padding(10, 12).Margin(12, 0, 0, 0).Radius(10).Background(accent.Alpha(0.12)).
+		Border(0.7, accent.Alpha(0.35)).AlignItems(ui.Center).Children(func() {
+		icon(c, "sparkles").FontSize(13).TextColor(accent)
+		ui.Text(c, "新版本 "+s.update.Version).FontSize(11).FontWeight(600).Grow(1)
+		if s.installing {
+			ui.Text(c, fmt.Sprintf("正在更新 %d%%", s.progress)).FontSize(11).TextColor(muted)
+			return
+		}
+		b := chip(c, true).Padding(4, 12)
+		b.Children(func() { ui.Text(c, "更新并重启").FontSize(11).FontWeight(500) })
+		if b.Clicked() {
+			s.installUpdate()
 		}
 	})
 }

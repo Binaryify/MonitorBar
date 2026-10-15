@@ -9,5 +9,9 @@
       "LSUIElement": true,
       "NSLocalNetworkUsageDescription": "通过局域网切换显示器输入源、调节音量。"
     }
+  },
+  "updates": {
+    "publicKey": "DxxxBNSL2DBX5bG0S9WaWASX7p4ZKIXhqP3dhBaTwVs=",
+    "github": "Binaryify/MonitorBar"
   }
 }

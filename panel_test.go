@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
@@ -192,6 +193,21 @@ func TestAutoSwitch(t *testing.T) {
 	s.autoCheck()
 	if s.prefs.SoftBrightness != 30 || s.prefs.Warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
 		t.Errorf("at 19:00: brightness %v warmth %v gamma %v, want the night scene", s.prefs.SoftBrightness, s.prefs.Warmth, *gamma)
+	}
+}
+
+// A newer version shows a bar offering it; none shows nothing.
+func TestUpdateBar(t *testing.T) {
+	p, _ := testPanel(t)
+	tt := newTester(p)
+	if tt.HasText("更新并重启") {
+		t.Fatal("an update bar without an update")
+	}
+	p.s.update = &mygo.Update{Version: "9.9.9"}
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("新版本 9.9.9") || !tt.HasText("更新并重启") {
+		t.Errorf("no update bar in %q", tt.Texts())
 	}
 }
 
