@@ -23,28 +23,34 @@ import (
 func testPanel(t *testing.T) (*panel, *[2]float64) {
 	t.Helper()
 	var gamma [2]float64
+	sc := &screen{
+		monitor: display.Monitor{ID: "mi", Name: "Mi Monitor", Connection: "HDMI"},
+		link:    mitv.New("192.0.2.1"),
+		inputs:  []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
+		volume:  80, hasVolume: true, deviceVolume: 80,
+		soft: 100,
+	}
 	s := &store{
 		prefs:    &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
 		tracker:  usage.Open(filepath.Join(t.TempDir(), "usage.json")),
 		redraw:   func() {},
-		setGamma: func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
-		monitor:  display.Monitor{Name: "Mi Monitor", Connection: "HDMI"},
-		link:     mitv.New("192.0.2.1"),
-		inputs:   []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
-		volume:   80, hasVolume: true, deviceVolume: 80,
-		now: func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
+		setGamma: func(display.Monitor, float64, float64) error { return nil },
+		screens:  []*screen{sc},
+		cur:      sc,
+		now:      func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
+	s.setGamma = func(_ display.Monitor, b, w float64) error { gamma = [2]float64{b, w}; return nil }
 	s.prefs.DayScene, s.prefs.NightScene = "日间", "夜间"
 	s.dayStart, s.nightStart = parseClock("07:00", 0), parseClock("19:00", 0)
 	for _, rate := range []int{160, 144, 120, 60} {
 		for _, w := range []int{3360, 3200, 2560, 1920, 1600, 1280} {
-			s.modes = append(s.modes, display.Mode{Width: w, Height: w * 9 / 16, PixelWidth: 2 * w, PixelHeight: w * 9 / 8, RefreshRate: rate})
+			sc.modes = append(sc.modes, display.Mode{Width: w, Height: w * 9 / 16, PixelWidth: 2 * w, PixelHeight: w * 9 / 8, RefreshRate: rate})
 		}
 		for _, w := range []int{3840, 2560, 1920} {
-			s.modes = append(s.modes, display.Mode{Width: w, Height: w * 9 / 16, PixelWidth: w, PixelHeight: w * 9 / 16, RefreshRate: rate})
+			sc.modes = append(sc.modes, display.Mode{Width: w, Height: w * 9 / 16, PixelWidth: w, PixelHeight: w * 9 / 16, RefreshRate: rate})
 		}
 	}
-	s.current, s.hasCurrent = s.modes[3], true // 1920 × 1080 HiDPI at 160 Hz
+	sc.current, sc.hasCurrent = sc.modes[3], true // 1920 × 1080 HiDPI at 160 Hz
 	day := func(d string, awake, active int) usage.Day { return usage.Day{Day: d, Awake: awake, Active: active} }
 	s.usage = []usage.Day{day("2026-10-08", 5*3600, 3*3600), day("2026-10-09", 8*3600, 6*3600), day("2026-10-10", 2*3600, 3000),
 		day("2026-10-11", 0, 0), day("2026-10-12", 6*3600, 4*3600), day("2026-10-13", 9*3600, 7*3600), day("2026-10-14", 3*3600, 2*3600)}
@@ -108,7 +114,7 @@ func TestTabs(t *testing.T) {
 // nothing about what doesn't.
 func TestNoChannelShowsNoUnsupportedText(t *testing.T) {
 	p, _ := testPanel(t)
-	p.s.link, p.s.inputs, p.s.hasVolume = nil, nil, false
+	p.s.cur.link, p.s.cur.inputs, p.s.cur.hasVolume = nil, nil, false
 	tt := newTester(p)
 	for _, tab := range []string{"概览", "画面"} {
 		if err := tt.Click(tab); err != nil {
@@ -136,10 +142,10 @@ func TestNoChannelShowsNoUnsupportedText(t *testing.T) {
 func TestDDCOnly(t *testing.T) {
 	p, _ := testPanel(t)
 	s := p.s
-	s.link, s.inputs = nil, nil
-	s.hasBrightness, s.brightness = true, 70
-	s.ddcInputs = []mitv.Source{{ID: 0x0F, Name: display.InputName(0x0F)}, {ID: 0x11, Name: display.InputName(0x11)}}
-	s.controls = []control{{code: display.VCPContrast, name: "对比度", value: 50, max: 100}}
+	s.cur.link, s.cur.inputs = nil, nil
+	s.cur.hasBrightness, s.cur.brightness = true, 70
+	s.cur.ddcInputs = []mitv.Source{{ID: 0x0F, Name: display.InputName(0x0F)}, {ID: 0x11, Name: display.InputName(0x11)}}
+	s.cur.controls = []control{{code: display.VCPContrast, name: "对比度", value: 50, max: 100}}
 	tt := newTester(p)
 	for _, want := range []string{"输入源", "DDC/CI", "DP", "HDMI 1", "硬件背光 · DDC/CI", "70"} {
 		if !tt.HasText(want) {
@@ -149,8 +155,8 @@ func TestDDCOnly(t *testing.T) {
 	if err := tt.Click("夜间"); err != nil {
 		t.Fatal(err)
 	}
-	if s.brightness != 30 || s.prefs.SoftBrightness != 100 {
-		t.Errorf("night scene: backlight %v, software %v; want the backlight dimmed", s.brightness, s.prefs.SoftBrightness)
+	if s.cur.brightness != 30 || s.cur.soft != 100 {
+		t.Errorf("night scene: backlight %v, software %v; want the backlight dimmed", s.cur.brightness, s.cur.soft)
 	}
 	if err := tt.Click("画面"); err != nil {
 		t.Fatal(err)
@@ -217,22 +223,23 @@ func TestUpdateBar(t *testing.T) {
 func TestRedmi27NU(t *testing.T) {
 	p, _ := testPanel(t)
 	s := p.s
-	s.link, s.inputs = nil, nil
-	s.monitor = display.Monitor{Name: "Redmi 27 NU", Connection: "DP"}
-	s.ddcInputs = []mitv.Source{{ID: 0x11, Name: "HDMI 1"}, {ID: 0x12, Name: "HDMI 2"}, {ID: 0x0F, Name: "DP"}, {ID: 0x10, Name: "USB-C"}}
-	s.ddc = nil
-	s.input = 0x10
-	s.applyInput(ddcReading{values: map[byte][2]int{display.VCPInput: {8, 14}}})
-	if s.input != 0x10 {
-		t.Errorf("input = %#x after reading 8, want the chosen 0x10 kept", s.input)
+	sc := s.cur
+	sc.link, sc.inputs = nil, nil
+	sc.monitor = display.Monitor{ID: "nu", Name: "Redmi 27 NU", Connection: "DP"}
+	sc.ddcInputs = []mitv.Source{{ID: 0x11, Name: "HDMI 1"}, {ID: 0x12, Name: "HDMI 2"}, {ID: 0x0F, Name: "DP"}, {ID: 0x10, Name: "USB-C"}}
+	sc.ddc = nil
+	sc.input = 0x10
+	s.applyInput(sc, ddcReading{values: map[byte][2]int{display.VCPInput: {8, 14}}})
+	if sc.input != 0x10 {
+		t.Errorf("input = %#x after reading 8, want the chosen 0x10 kept", sc.input)
 	}
-	s.applyInput(ddcReading{values: map[byte][2]int{display.VCPInput: {0x11, 14}}})
-	if s.input != 0x11 {
-		t.Errorf("input = %#x after reading 0x11, want 0x11", s.input)
+	s.applyInput(sc, ddcReading{values: map[byte][2]int{display.VCPInput: {0x11, 14}}})
+	if sc.input != 0x11 {
+		t.Errorf("input = %#x after reading 0x11, want 0x11", sc.input)
 	}
-	for _, m := range s.modes {
+	for _, m := range sc.modes {
 		if m.Width == 1920 && m.HiDPI() && m.RefreshRate == 60 {
-			s.current = m
+			sc.current = m
 		}
 	}
 	tt := newTester(p)
@@ -259,7 +266,7 @@ func TestFollowBuiltin(t *testing.T) {
 	if tt.HasText("跟随内屏亮度") {
 		t.Fatal("the card shows without a built-in display and DDC/CI")
 	}
-	s.hasBuiltin, s.hasBrightness, s.brightness, s.lastBuiltin = true, true, 30, -1
+	s.hasBuiltin, s.cur.hasBrightness, s.cur.brightness, s.lastBuiltin = true, true, 30, -1
 	tt.Frame()
 	if err := tt.Click("启用跟随内屏亮度"); err != nil {
 		t.Fatalf("no follow switch: %v in %q", err, tt.Texts())
@@ -269,28 +276,71 @@ func TestFollowBuiltin(t *testing.T) {
 	read := func() (float64, bool) { return builtin, true }
 	steps := 0
 	for ; steps < 30 && (steps == 0 || s.easing); steps++ {
-		before := s.brightness
+		before := s.cur.brightness
 		s.followTick(read)
-		if jump := math.Abs(s.brightness - before); jump > 25 {
+		if jump := math.Abs(s.cur.brightness - before); jump > 25 {
 			t.Fatalf("step %d jumped %v points", steps, jump)
 		}
 	}
-	if want := followTarget(0.8, s.prefs.FollowMin, s.prefs.FollowMax); s.brightness != want {
-		t.Fatalf("eased to %v after %d steps, want %v", s.brightness, steps, want)
+	if want := followTarget(0.8, s.prefs.FollowMin, s.prefs.FollowMax); s.cur.brightness != want {
+		t.Fatalf("eased to %v after %d steps, want %v", s.cur.brightness, steps, want)
 	}
 	s.setBrightness(40) // a manual change
 	for range 5 {
 		s.followTick(read)
 	}
-	if s.brightness != 40 {
-		t.Errorf("following undid a manual change while the built-in display stayed: %v", s.brightness)
+	if s.cur.brightness != 40 {
+		t.Errorf("following undid a manual change while the built-in display stayed: %v", s.cur.brightness)
 	}
 	builtin = 0.2
 	for range 30 {
 		s.followTick(read)
 	}
-	if want := followTarget(0.2, s.prefs.FollowMin, s.prefs.FollowMax); s.brightness != want {
-		t.Errorf("after the built-in display dimmed: %v, want %v", s.brightness, want)
+	if want := followTarget(0.2, s.prefs.FollowMin, s.prefs.FollowMax); s.cur.brightness != want {
+		t.Errorf("after the built-in display dimmed: %v, want %v", s.cur.brightness, want)
+	}
+}
+
+// Each display keeps its own picture. Switching shows that display's mode.
+func TestEachMonitorKeepsItsPicture(t *testing.T) {
+	p, gamma := testPanel(t)
+	s := p.s
+	other := &screen{
+		monitor:    display.Monitor{ID: "studio", Name: "Studio Display", Connection: "Thunderbolt"},
+		soft:       100,
+		current:    display.Mode{Width: 2560, Height: 1440, PixelWidth: 2560, PixelHeight: 1440, RefreshRate: 60},
+		hasCurrent: true,
+	}
+	s.screens = []*screen{s.cur, other}
+	tt := newTester(p)
+	if !tt.HasText("Studio Display") {
+		t.Fatalf("switcher missing in %q", tt.Texts())
+	}
+	if err := tt.Click("Studio Display"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if s.cur != other {
+		t.Fatalf("selected %s", s.cur.monitor.Name)
+	}
+	if !tt.HasText("2560 × 1440") {
+		t.Fatalf("studio mode missing in %q", tt.Texts())
+	}
+	if err := tt.Click("夜间"); err != nil {
+		t.Fatal(err)
+	}
+	if other.soft != 30 || other.warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
+		t.Fatalf("studio picture soft %v warmth %v gamma %v", other.soft, other.warmth, *gamma)
+	}
+	if s.screens[0].soft != 100 || s.screens[0].warmth != 0 {
+		t.Fatalf("first monitor changed: soft %v warmth %v", s.screens[0].soft, s.screens[0].warmth)
+	}
+	if err := tt.Click("Mi Monitor"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if s.cur.monitor.Name != "Mi Monitor" || !tt.HasText("1920 × 1080") {
+		t.Fatalf("back on %s, texts %q", s.cur.monitor.Name, tt.Texts())
 	}
 }
 
@@ -346,7 +396,7 @@ func TestPanelReportsNaturalHeight(t *testing.T) {
 // no other frame asked for: windows draw only on demand.
 func TestNoticeGrowsPanelWithoutInput(t *testing.T) {
 	p, _ := testPanel(t)
-	p.s.setGamma = func(b, w float64) error {
+	p.s.setGamma = func(_ display.Monitor, b, w float64) error {
 		if b < 0.5 {
 			return display.ErrGammaLimited
 		}

@@ -74,9 +74,7 @@ func (a *app) ready(show bool) {
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		a.s.save()
 		display.RestoreGamma()
-		if a.s.ddc != nil {
-			a.s.ddc.Close()
-		}
+		a.s.close()
 		a.tray.Destroy()
 	})
 
@@ -121,7 +119,12 @@ func (a *app) open() {
 	a.s.panelOpened()
 	icon := a.tray.Bounds()
 	area := mygo.Screen.DisplayNearestPoint(mygo.Point{X: icon.X + icon.Width/2, Y: icon.Y + icon.Height/2}).WorkArea
-	a.panel.maxContent = float32(max(area.Height-chrome, 200))
+	// 42 is the display switcher, present only when there is more than one.
+	overhead := chrome
+	if len(a.s.screens) > 1 {
+		overhead = chrome + 42
+	}
+	a.panel.maxContent = float32(max(area.Height-overhead, 200))
 	a.flyout = mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      a.tray,
 		Placement: mygo.PlacementBottom,

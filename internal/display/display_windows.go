@@ -4,6 +4,7 @@ package display
 
 import (
 	"errors"
+	"slices"
 	"syscall"
 	"unsafe"
 
@@ -139,9 +140,10 @@ const (
 	dmFieldsForMode      = 0x40000 | 0x80000 | 0x100000 | 0x400000 // bits per pixel, width, height, frequency
 )
 
-// Target returns the primary display: a desktop's monitors are all external.
-func Target() Monitor {
-	var fallback Monitor
+// Monitors lists every display attached to the desktop, external ones first.
+// Target is the primary display, as before.
+func Monitors() []Monitor {
+	var out []Monitor
 	for i := uint32(0); ; i++ {
 		var dd displayDevice
 		dd.Size = uint32(unsafe.Sizeof(dd))
@@ -151,37 +153,58 @@ func Target() Monitor {
 		if dd.StateFlags&attachedToDesktop == 0 {
 			continue
 		}
-		m := Monitor{handle: windows.UTF16ToString(dd.DeviceName[:])}
-		m.Name, m.Connection, m.NativeWidth, m.NativeHeight = targetInfo(m.handle)
+		m := Monitor{handle: windows.UTF16ToString(dd.DeviceName[:]), primary: dd.StateFlags&primaryDevice != 0}
+		var path string
+		m.Name, m.Connection, path, m.Builtin, m.NativeWidth, m.NativeHeight = targetInfo(m.handle)
+		m.ID = path
+		if m.ID == "" {
+			m.ID = m.handle
+		}
 		if m.Name == "" {
 			m.Name = monitorString(dd.DeviceName[:])
 		}
-		if dd.StateFlags&primaryDevice != 0 {
-			return m
-		}
-		if fallback.handle == "" {
-			fallback = m
-		}
+		m.readOrigin()
+		out = append(out, m)
 	}
-	if fallback.Name == "" {
-		fallback.Name = "显示器"
+	if len(out) == 0 {
+		return []Monitor{{Name: "显示器", ID: "default"}}
 	}
-	return fallback
+	return uniqueIDs(arrange(out))
 }
 
-// targetInfo finds the monitor's friendly name, cable type and preferred
-// (native) resolution through the display path whose source is the GDI
-// device. DSR and similar list modes larger than the panel; this one is not.
-func targetInfo(device string) (name, connection string, width, height int) {
+// Target returns the primary display.
+func Target() Monitor {
+	all := Monitors()
+	for _, m := range all {
+		if m.primary {
+			return m
+		}
+	}
+	return all[0]
+}
+
+func (m *Monitor) readOrigin() {
+	var dm devMode
+	dm.Size = uint16(unsafe.Sizeof(dm))
+	if r, _, _ := procEnumDisplaySettings.Call(uintptr(unsafe.Pointer(m.device())), enumCurrentSettings, uintptr(unsafe.Pointer(&dm))); r != 0 {
+		m.x, m.y = int(dm.PositionX), int(dm.PositionY)
+	}
+}
+
+// targetInfo finds the monitor's friendly name, cable type, stable device
+// path and preferred (native) resolution through the display path whose
+// source is the GDI device. DSR and similar list modes larger than the
+// panel; the preferred mode is not.
+func targetInfo(device string) (name, connection, path string, builtin bool, width, height int) {
 	var nPaths, nModes uint32
 	if r, _, _ := procGetDisplayConfigBufferSizes.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&nModes))); r != 0 || nPaths == 0 {
-		return "", "", 0, 0
+		return "", "", "", false, 0, 0
 	}
 	paths := make([]pathInfo, nPaths)
 	modes := make([][64]byte, max(nModes, 1))
 	if r, _, _ := procQueryDisplayConfig.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&paths[0])),
 		uintptr(unsafe.Pointer(&nModes)), uintptr(unsafe.Pointer(&modes[0])), 0); r != 0 {
-		return "", "", 0, 0
+		return "", "", "", false, 0, 0
 	}
 	for _, p := range paths[:nPaths] {
 		source := sourceDeviceName{Header: deviceInfoHeader{Type: getSourceName, Adapter: p.SourceAdapter, ID: p.SourceID}}
@@ -198,9 +221,14 @@ func targetInfo(device string) (name, connection string, width, height int) {
 		preferred := targetPreferredMode{Header: deviceInfoHeader{Type: getPreferredMode, Adapter: p.TargetAdapter, ID: p.TargetID}}
 		preferred.Header.Size = uint32(unsafe.Sizeof(preferred))
 		procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&preferred)))
-		return windows.UTF16ToString(target.FriendlyName[:]), outputTechnology(target.OutputTechnology), int(preferred.Width), int(preferred.Height)
+		builtin = target.OutputTechnology == 0x80000000
+		connection = outputTechnology(target.OutputTechnology)
+		if builtin {
+			connection = ""
+		}
+		return windows.UTF16ToString(target.FriendlyName[:]), connection, windows.UTF16ToString(target.DevicePath[:]), builtin, int(preferred.Width), int(preferred.Height)
 	}
-	return "", "", 0, 0
+	return "", "", "", false, 0, 0
 }
 
 func outputTechnology(t uint32) string {
@@ -214,7 +242,7 @@ func outputTechnology(t uint32) string {
 	case 10, 11:
 		return "DisplayPort"
 	case 0x80000000:
-		return "内置"
+		return ""
 	}
 	return ""
 }
@@ -285,7 +313,7 @@ var identity = func() (r gammaRamp) {
 	return r
 }()
 
-var gammaDevice string // the display last dimmed, for RestoreGamma
+var gammaDevices []string // every display dimmed, so RestoreGamma can undo each
 
 // SetGamma dims and warms the picture through the gamma ramp.
 func (m Monitor) SetGamma(brightness, warmth float64) error {
@@ -294,7 +322,9 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 		return errors.New("display: no device context")
 	}
 	defer procDeleteDC.Call(dc)
-	gammaDevice = m.handle
+	if !slices.Contains(gammaDevices, m.handle) {
+		gammaDevices = append(gammaDevices, m.handle)
+	}
 	gr, gg, gb := gains(brightness, warmth)
 	if neutral(brightness, warmth) {
 		gr, gg, gb = 1, 1, 1
@@ -322,18 +352,18 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 	return errors.New("display: Windows refused the gamma ramp")
 }
 
-// RestoreGamma puts the identity ramp back; Windows keeps a changed ramp
-// after the app quits.
+// RestoreGamma puts the identity ramp back on every display this process
+// dimmed; Windows keeps a changed ramp after the app quits.
 func RestoreGamma() {
-	if gammaDevice == "" {
-		return
+	for _, device := range gammaDevices {
+		m := Monitor{handle: device}
+		if dc := m.dc(); dc != 0 {
+			ramp := identity
+			procSetDeviceGammaRamp.Call(dc, uintptr(unsafe.Pointer(&ramp)))
+			procDeleteDC.Call(dc)
+		}
 	}
-	m := Monitor{handle: gammaDevice}
-	if dc := m.dc(); dc != 0 {
-		ramp := identity
-		procSetDeviceGammaRamp.Call(dc, uintptr(unsafe.Pointer(&ramp)))
-		procDeleteDC.Call(dc)
-	}
+	gammaDevices = nil
 }
 
 // ResetGammaBase does nothing on Windows: changes start from the identity.

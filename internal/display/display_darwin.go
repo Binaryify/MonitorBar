@@ -4,6 +4,7 @@ package display
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"sync"
 	"unsafe"
@@ -24,6 +25,9 @@ var (
 	cgGetActiveDisplayList             func(max uint32, ids *uint32, count *uint32) int32
 	cgMainDisplayID                    func() uint32
 	cgDisplayIsBuiltin                 func(id uint32) uint32
+	cgDisplayVendorNumber              func(id uint32) uint32
+	cgDisplayModelNumber               func(id uint32) uint32
+	cgDisplaySerialNumber              func(id uint32) uint32
 	cgDisplayIsAsleep                  func(id uint32) uint32
 	cgDisplayCopyAllDisplayModes       func(id uint32, options uintptr) uintptr
 	cgDisplayCopyDisplayMode           func(id uint32) uintptr
@@ -52,6 +56,8 @@ var (
 	cfStringGetCString        func(s uintptr, buf *byte, size int, encoding uint32) bool
 	cfGetTypeID               func(ref uintptr) uintptr
 	cfStringGetTypeID         func() uintptr
+	cfNumberGetTypeID         func() uintptr
+	cfNumberGetValue          func(number uintptr, theType int32, value *int64) bool
 
 	ioServiceMatching               func(name string) uintptr
 	ioServiceGetMatchingServices    func(port uint32, matching uintptr, iter *uint32) int32
@@ -81,6 +87,8 @@ func load() {
 		for fn, name := range map[any]string{
 			&cgGetActiveDisplayList: "CGGetActiveDisplayList", &cgMainDisplayID: "CGMainDisplayID",
 			&cgDisplayIsBuiltin: "CGDisplayIsBuiltin", &cgDisplayIsAsleep: "CGDisplayIsAsleep",
+			&cgDisplayVendorNumber: "CGDisplayVendorNumber", &cgDisplayModelNumber: "CGDisplayModelNumber",
+			&cgDisplaySerialNumber:        "CGDisplaySerialNumber",
 			&cgDisplayCopyAllDisplayModes: "CGDisplayCopyAllDisplayModes", &cgDisplayCopyDisplayMode: "CGDisplayCopyDisplayMode",
 			&cgDisplayModeGetWidth: "CGDisplayModeGetWidth", &cgDisplayModeGetHeight: "CGDisplayModeGetHeight",
 			&cgDisplayModeGetPixelWidth: "CGDisplayModeGetPixelWidth", &cgDisplayModeGetPixelHeight: "CGDisplayModeGetPixelHeight",
@@ -97,6 +105,7 @@ func load() {
 			&cfRetain: "CFRetain", &cfRelease: "CFRelease", &cfDictionaryCreate: "CFDictionaryCreate",
 			&cfDictionaryGetValue: "CFDictionaryGetValue", &cfStringCreateWithCString: "CFStringCreateWithCString",
 			&cfStringGetCString: "CFStringGetCString", &cfGetTypeID: "CFGetTypeID", &cfStringGetTypeID: "CFStringGetTypeID",
+			&cfNumberGetTypeID: "CFNumberGetTypeID", &cfNumberGetValue: "CFNumberGetValue",
 		} {
 			purego.RegisterLibFunc(fn, cf, name)
 		}
@@ -124,20 +133,63 @@ func symbolValue(lib uintptr, name string) uintptr {
 	return **(**uintptr)(unsafe.Pointer(&addr))
 }
 
-// Target returns the first external display, or the main one.
-func Target() Monitor {
+// Monitors lists every active display, external ones first. Target is the
+// first external display, or the built-in one when it is the only display.
+func Monitors() []Monitor {
 	load()
-	var ids [16]uint32
+	var ids [32]uint32
 	var n uint32
-	cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n)
-	id := cgMainDisplayID()
-	for _, d := range ids[:n] {
-		if cgDisplayIsBuiltin(d) == 0 {
-			id = d
-			break
+	if cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n) != 0 {
+		n = 0
+	}
+	ports := portTypes()
+	ext, inb := 0, 0
+	twins := map[[4]uint32]int{}
+	var out []Monitor
+	for _, id := range ids[:n] {
+		vendor, model, serial := cgDisplayVendorNumber(id), cgDisplayModelNumber(id), cgDisplaySerialNumber(id)
+		builtin := cgDisplayIsBuiltin(id) != 0
+		kind := uint32(0)
+		if builtin {
+			kind = 1
+		}
+		key := [4]uint32{vendor, model, serial, kind}
+		m := Monitor{
+			Name: screenName(id), Builtin: builtin, handle: id,
+			vendor: vendor, model: model, serial: serial, twin: twins[key],
+			ID: fmt.Sprintf("%04x-%04x-%08x", vendor, model, serial),
+		}
+		twins[key]++
+		if vendor == 0 && model == 0 && serial == 0 {
+			m.ID = fmt.Sprintf("cg-%d", id)
+		}
+		if builtin {
+			m.slot = inb
+			inb++
+		} else {
+			m.slot = ext
+			if ext < len(ports) {
+				m.Connection = ports[ext]
+			}
+			ext++
+		}
+		out = append(out, m)
+	}
+	if len(out) == 0 {
+		return []Monitor{{Name: "显示器", ID: "default"}}
+	}
+	return uniqueIDs(arrange(out))
+}
+
+// Target returns the first external display, or the built-in one.
+func Target() Monitor {
+	all := Monitors()
+	for _, m := range all {
+		if !m.Builtin {
+			return m
 		}
 	}
-	return Monitor{Name: screenName(id), Connection: connection(), handle: id}
+	return all[0]
 }
 
 // screenName asks NSScreen for the display's localized name.
@@ -155,17 +207,20 @@ func screenName(id uint32) string {
 	return "显示器"
 }
 
-// connection reads the cable type ("HDMI", "DisplayPort") from IOKit.
-func connection() string {
+// portTypes reads each cable's type ("HDMI", "DisplayPort") from IOKit, in
+// registry order. They are paired with external displays in that order:
+// the system doesn't say which port feeds which display.
+func portTypes() []string {
 	var iter uint32
 	if ioServiceGetMatchingServices(0, ioServiceMatching("IOPortTransportStateDisplayPort"), &iter) != 0 {
-		return ""
+		return nil
 	}
 	defer ioObjectRelease(iter)
 	metadata := cfStringCreateWithCString(0, "Metadata", utf8Encoding)
 	defer cfRelease(metadata)
 	field := cfStringCreateWithCString(0, "DFP Type Description", utf8Encoding)
 	defer cfRelease(field)
+	var types []string
 	for entry := ioIteratorNext(iter); entry != 0; entry = ioIteratorNext(iter) {
 		dict := ioRegistryEntryCreateCFProperty(entry, metadata, 0, 0)
 		ioObjectRelease(entry)
@@ -175,10 +230,10 @@ func connection() string {
 		value := goCFString(cfDictionaryGetValue(dict, field))
 		cfRelease(dict)
 		if value != "" {
-			return value
+			types = append(types, value)
 		}
 	}
-	return ""
+	return types
 }
 
 func (m Monitor) Modes() []Mode {
@@ -232,32 +287,45 @@ func (m Monitor) Apply(mode Mode) error {
 	return nil
 }
 
-var gammaBase [3][]float32 // the ColorSync curve, captured before the first change
+// gammaBase is each display's ColorSync curve, captured before its first
+// change. gammaReady is set once ColorSync has been restored this session,
+// so dimming a second display doesn't wipe the first.
+var (
+	gammaBase  = map[uint32][3][]float32{}
+	gammaReady bool
+)
 
-// SetGamma dims and warms the picture through the gamma table. macOS resets
-// it when the app quits.
+// SetGamma dims and warms this display through its gamma table. macOS
+// resets every table when the app quits.
 func (m Monitor) SetGamma(brightness, warmth float64) error {
 	load()
-	if neutral(brightness, warmth) {
-		RestoreGamma()
-		return nil
-	}
-	if gammaBase[0] == nil {
+	if !gammaReady {
 		cgDisplayRestoreColorSyncSettings()
+		gammaReady = true
+	}
+	base, ok := gammaBase[m.handle]
+	if !ok {
 		capacity := cgDisplayGammaTableCapacity(m.handle)
+		if capacity == 0 {
+			return errors.New("display: no gamma table")
+		}
 		r, g, b := make([]float32, capacity), make([]float32, capacity), make([]float32, capacity)
 		var n uint32
 		cgGetDisplayTransferByTable(m.handle, capacity, &r[0], &g[0], &b[0], &n)
-		gammaBase = [3][]float32{r[:n], g[:n], b[:n]}
+		if n == 0 {
+			return errors.New("display: no gamma table")
+		}
+		base = [3][]float32{r[:n], g[:n], b[:n]}
+		gammaBase[m.handle] = base
 	}
-	if len(gammaBase[0]) == 0 {
-		return errors.New("display: no gamma table")
+	gr, gg, gb := 1.0, 1.0, 1.0
+	if !neutral(brightness, warmth) {
+		gr, gg, gb = gains(brightness, warmth)
 	}
-	gr, gg, gb := gains(brightness, warmth)
 	scaled := [3][]float32{}
 	for i, gain := range []float64{gr, gg, gb} {
-		scaled[i] = make([]float32, len(gammaBase[i]))
-		for j, v := range gammaBase[i] {
+		scaled[i] = make([]float32, len(base[i]))
+		for j, v := range base[i] {
 			scaled[i][j] = v * float32(gain)
 		}
 	}
@@ -267,14 +335,19 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 	return nil
 }
 
-// RestoreGamma puts the ColorSync curves back.
+// RestoreGamma puts every display's ColorSync curve back.
 func RestoreGamma() {
 	load()
 	cgDisplayRestoreColorSyncSettings()
+	gammaBase = map[uint32][3][]float32{}
+	gammaReady = false
 }
 
-// ResetGammaBase forgets the captured curve, after the displays changed.
-func ResetGammaBase() { gammaBase = [3][]float32{} }
+// ResetGammaBase forgets the captured curves, after the displays changed.
+func ResetGammaBase() {
+	gammaBase = map[uint32][3][]float32{}
+	gammaReady = false
+}
 
 func (m Monitor) Asleep() bool {
 	load()

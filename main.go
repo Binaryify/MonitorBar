@@ -1,6 +1,7 @@
-// MonitorBar manages an external monitor from the macOS menu bar or the
+// MonitorBar manages connected monitors from the macOS menu bar or the
 // Windows notification area: inputs and volume over the HyperOS LAN API,
-// software brightness and warmth, resolutions and screen time.
+// software brightness and warmth, resolutions and screen time. Each display
+// keeps its own picture and control channel.
 //
 //	MonitorBar           run, panel opens on first launch
 //	MonitorBar --show    run and open the panel

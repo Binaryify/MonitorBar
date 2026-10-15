@@ -46,35 +46,125 @@ func loadIOAV() error {
 
 type ioavDDC struct{ service uintptr }
 
-// ddcTransport opens the AV service of the first external display: the app
-// manages one external monitor.
+// avMatch is one DCPAVServiceProxy, still owned by the caller.
+type avMatch struct {
+	entry                 uint32
+	vendor, model, serial uint32
+	external              bool
+}
+
+// ddcTransport opens the AV service of this display. The service is matched
+// by vendor, model and serial; failing that, by its place among the
+// external (or built-in) services, which is how a single external display
+// was always reached.
 func (m Monitor) ddcTransport() (ddcTransport, error) {
 	if err := loadIOAV(); err != nil {
 		return nil, err
 	}
+	matches := avMatches()
+	defer func() {
+		for _, a := range matches {
+			ioObjectRelease(a.entry)
+		}
+	}()
+	entry := pickAV(m, matches)
+	if entry == 0 {
+		return nil, errors.New("display: no AV service")
+	}
+	service := ioavServiceCreateWithService(0, entry)
+	if service == 0 {
+		return nil, errors.New("display: no AV service")
+	}
+	return &ioavDDC{service: service}, nil
+}
+
+func avMatches() []avMatch {
 	var iter uint32
 	if ioServiceGetMatchingServices(0, ioServiceMatching("DCPAVServiceProxy"), &iter) != 0 {
-		return nil, errors.New("display: no AV services")
+		return nil
 	}
 	defer ioObjectRelease(iter)
 	key := cfStringCreateWithCString(0, "Location", utf8Encoding)
 	defer cfRelease(key)
+	var out []avMatch
 	for entry := ioIteratorNext(iter); entry != 0; entry = ioIteratorNext(iter) {
 		location := ioRegistryEntryCreateCFProperty(entry, key, 0, 0)
 		external := goCFString(location) == "External"
 		if location != 0 {
 			cfRelease(location)
 		}
-		var service uintptr
-		if external {
-			service = ioavServiceCreateWithService(0, entry)
+		vendor, model, serial := productIDs(entry)
+		out = append(out, avMatch{entry: entry, vendor: vendor, model: model, serial: serial, external: external})
+	}
+	return out
+}
+
+// productIDs reads the EDID identity published on an AV service, or zeros
+// when the service doesn't say.
+func productIDs(entry uint32) (vendor, model, serial uint32) {
+	attrsKey := cfStringCreateWithCString(0, "DisplayAttributes", utf8Encoding)
+	defer cfRelease(attrsKey)
+	attrs := ioRegistryEntryCreateCFProperty(entry, attrsKey, 0, 0)
+	if attrs == 0 {
+		return 0, 0, 0
+	}
+	defer cfRelease(attrs)
+	productKey := cfStringCreateWithCString(0, "ProductAttributes", utf8Encoding)
+	defer cfRelease(productKey)
+	product := cfDictionaryGetValue(attrs, productKey)
+	if product == 0 {
+		return 0, 0, 0
+	}
+	num := func(name string) uint32 {
+		k := cfStringCreateWithCString(0, name, utf8Encoding)
+		defer cfRelease(k)
+		return cfNum(cfDictionaryGetValue(product, k))
+	}
+	vendor = num("LegacyManufacturerID")
+	if vendor == 0 {
+		vendor = num("VendorID")
+	}
+	return vendor, num("ProductID"), num("SerialNumber")
+}
+
+func cfNum(ref uintptr) uint32 {
+	if ref == 0 || cfGetTypeID(ref) != cfNumberGetTypeID() {
+		return 0
+	}
+	var v int64
+	if !cfNumberGetValue(ref, 4 /* kCFNumberSInt64Type */, &v) {
+		return 0
+	}
+	return uint32(v)
+}
+
+// pickAV chooses the service for m. Identical panels share an identity, so
+// twin is the index among that identity; when the service doesn't publish
+// one, slot is the index among external or built-in services.
+func pickAV(m Monitor, matches []avMatch) uint32 {
+	wantExternal := !m.Builtin
+	if m.vendor != 0 || m.model != 0 || m.serial != 0 {
+		var same []avMatch
+		for _, a := range matches {
+			if a.external == wantExternal && a.vendor == m.vendor && a.model == m.model && a.serial == m.serial {
+				same = append(same, a)
+			}
 		}
-		ioObjectRelease(entry)
-		if service != 0 {
-			return &ioavDDC{service: service}, nil
+		if m.twin >= 0 && m.twin < len(same) {
+			return same[m.twin].entry
 		}
 	}
-	return nil, errors.New("display: no external AV service")
+	n := 0
+	for _, a := range matches {
+		if a.external != wantExternal {
+			continue
+		}
+		if n == m.slot {
+			return a.entry
+		}
+		n++
+	}
+	return 0
 }
 
 func (d *ioavDDC) read(code byte) (value, maximum int, ok bool) {

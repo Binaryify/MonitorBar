@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -21,27 +22,28 @@ func (p *panel) overview(c *ui.Context) {
 			cardTitle(c, "输入源", "plug", s.inputChannel())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, src := range sources {
-					if chipText(c.Key(src.ID), src.Name, s.input == src.ID) {
+					if chipText(c.Key(s.cur.monitor.ID+"-"+strconv.Itoa(src.ID)), src.Name, s.cur.input == src.ID) {
 						s.selectInput(src)
 					}
 				}
 			})
 		})
 	}
-	if s.hasBrightness {
+	id := s.cur.monitor.ID
+	if s.cur.hasBrightness {
 		caption := "硬件背光 · DDC/CI"
 		if s.prefs.FollowBuiltin && s.canFollow() {
 			caption = "硬件背光 · 跟随内屏"
 		}
-		if (sliderCard{key: "backlight", title: "亮度", caption: caption, icon: "sun",
-			value: &s.brightness, lo: 0, hi: 100, step: 5}).show(c) {
-			s.setBrightness(s.brightness)
+		if (sliderCard{key: id + "-backlight", title: "亮度", caption: caption, icon: "sun",
+			value: &s.cur.brightness, lo: 0, hi: 100, step: 5}).show(c) {
+			s.setBrightness(s.cur.brightness)
 		}
-	} else if (sliderCard{key: "brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
-		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
-		s.applyGamma()
+	} else if (sliderCard{key: id + "-brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
+		value: &s.cur.soft, lo: 20, hi: 100, step: 5}).show(c) {
+		s.writeGamma(s.cur)
 	}
-	if s.hasVolume {
+	if s.cur.hasVolume {
 		p.volume(c)
 	}
 	p.scenes(c)
@@ -52,8 +54,8 @@ func (p *panel) hero(c *ui.Context) {
 	s := p.s
 	glow := float32(s.effectiveBrightness() / 100)
 	title, caption := "—", ""
-	if s.hasCurrent {
-		m := s.current
+	if s.cur.hasCurrent {
+		m := s.cur.current
 		title, caption = m.Title(), fmt.Sprintf("%d Hz", m.RefreshRate)
 		if m.HiDPI() {
 			caption = fmt.Sprintf("HiDPI · 渲染 %d×%d · %d Hz", m.PixelWidth, m.PixelHeight, m.RefreshRate)
@@ -78,8 +80,8 @@ func (p *panel) hero(c *ui.Context) {
 		ui.Row(c).Gap(5).Padding(8, 6, 0, 6).Children(func() {
 			ui.Box(c).Size(4, 4).Radius(2).Background(accent)
 			ui.Text(c, "当前画面").FontSize(9).Bold().LetterSpacing(1.1).TextColor(muted).Grow(1)
-			if s.monitor.Connection != "" {
-				ui.Text(c, s.monitor.Connection).FontSize(9).FontWeight(600).TextColor(accent)
+			if s.cur.monitor.Connection != "" {
+				ui.Text(c, s.cur.monitor.Connection).FontSize(9).FontWeight(600).TextColor(accent)
 			}
 		})
 	})
@@ -91,10 +93,10 @@ func (p *panel) volume(c *ui.Context) {
 		ui.Row(c).Gap(8).Children(func() {
 			icon(c, "volume").FontSize(14).TextColor(muted).Width(18)
 			ui.Text(c, "显示器音量").FontSize(12).FontWeight(600).Grow(1)
-			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
+			ui.Text(c, fmt.Sprint(int(math.Round(s.cur.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
-		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label("显示器音量").Changed() {
-			s.setVolume(s.volume)
+		if ui.Slider(c.Key(s.cur.monitor.ID+"-volume"), &s.cur.volume, 0, 100).Label("显示器音量").Changed() {
+			s.setVolume(s.cur.volume)
 		}
 	})
 }
@@ -127,22 +129,23 @@ func (p *panel) picture(c *ui.Context) {
 		p.followBuiltin(c)
 	}
 	p.autoSwitch(c)
-	if (sliderCard{key: "soft", title: "软件调光", caption: "在硬件亮度基础上再压暗，适合夜间", icon: "contrast",
-		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
-		s.applyGamma()
+	id := s.cur.monitor.ID
+	if (sliderCard{key: id + "-soft", title: "软件调光", caption: "在硬件亮度基础上再压暗，适合夜间", icon: "contrast",
+		value: &s.cur.soft, lo: 20, hi: 100, step: 5}).show(c) {
+		s.writeGamma(s.cur)
 	}
-	if (sliderCard{key: "warmth", title: "色温", caption: "向右更暖，减少蓝光", icon: "thermometer",
-		value: &s.prefs.Warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
+	if (sliderCard{key: id + "-warmth", title: "色温", caption: "向右更暖，减少蓝光", icon: "thermometer",
+		value: &s.cur.warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
 			if v < 1 {
 				return "标准"
 			}
 			return fmt.Sprint(int(math.Round(v)))
 		}}).show(c) {
-		s.applyGamma()
+		s.writeGamma(s.cur)
 	}
-	for i := range s.controls { // only what the monitor answers over DDC/CI
-		ctl := &s.controls[i]
-		if (sliderCard{key: "ddc-" + ctl.name, title: ctl.name, caption: "硬件 · DDC/CI", icon: "sliders",
+	for i := range s.cur.controls { // only what the monitor answers over DDC/CI
+		ctl := &s.cur.controls[i]
+		if (sliderCard{key: s.cur.monitor.ID + "-ddc-" + ctl.name, title: ctl.name, caption: "硬件 · DDC/CI", icon: "sliders",
 			value: &ctl.value, lo: 0, hi: float64(ctl.max), step: 1}).show(c) {
 			s.setControl(i)
 		}
@@ -232,24 +235,25 @@ func (p *panel) autoSwitch(c *ui.Context) {
 
 func (p *panel) modes(c *ui.Context) {
 	s := p.s
+	sc := s.cur
 	rate := 60
-	if s.hasCurrent {
-		rate = s.current.RefreshRate
+	if sc.hasCurrent {
+		rate = sc.current.RefreshRate
 	}
-	if rates := display.RefreshRates(s.modes, s.current); len(rates) > 1 {
+	if rates := display.RefreshRates(sc.modes, sc.current); len(rates) > 1 {
 		card(c, func() {
-			cardTitle(c, "刷新率", "gauge", s.current.Title())
+			cardTitle(c, "刷新率", "gauge", sc.current.Title())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, m := range rates {
-					if chipText(c.Key(m.ID()), fmt.Sprintf("%d Hz", m.RefreshRate), m.RefreshRate == rate) {
+					if chipText(c.Key(sc.monitor.ID+"/"+m.ID()), fmt.Sprintf("%d Hz", m.RefreshRate), m.RefreshRate == rate) {
 						s.applyMode(m)
 					}
 				}
 			})
 		})
 	}
-	p.resolutions(c, "HiDPI（清晰）", "zoom", display.Resolutions(s.modes, true, rate))
-	p.resolutions(c, "标准", "layers", display.Resolutions(s.modes, false, rate))
+	p.resolutions(c, "HiDPI（清晰）", "zoom", display.Resolutions(sc.modes, true, rate))
+	p.resolutions(c, "标准", "layers", display.Resolutions(sc.modes, false, rate))
 }
 
 func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []display.Mode) {
@@ -261,8 +265,8 @@ func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []displ
 		cardTitle(c, title, iconName, fmt.Sprintf("%d 种", len(modes)))
 		ui.Column(c).Gap(4).Children(func() {
 			for _, m := range modes {
-				selected := s.hasCurrent && m.SizeKey() == s.current.SizeKey()
-				row := ui.Row(c.Key(m.ID())).Height(28).PaddingX(9).Gap(8).Radius(8).Cursor(ui.CursorPointer)
+				selected := s.cur.hasCurrent && m.SizeKey() == s.cur.current.SizeKey()
+				row := ui.Row(c.Key(s.cur.monitor.ID + "/" + m.ID())).Height(28).PaddingX(9).Gap(8).Radius(8).Cursor(ui.CursorPointer)
 				if selected {
 					row.Background(accent.Alpha(0.14))
 				} else if row.Hovered() {

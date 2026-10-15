@@ -54,6 +54,7 @@ func (p *panel) view(c *ui.Context) {
 		}
 		body.Children(func() {
 			p.header(c)
+			p.monitorPicker(c)
 			p.tabs(c)
 			p.content(c)
 			p.updateBar(c)
@@ -99,7 +100,7 @@ func (p *panel) header(c *ui.Context) {
 			icon(c, "display").FontSize(15).TextColor(ui.RGB(255, 255, 255))
 		})
 		ui.Column(c).Gap(3).Grow(1).Children(func() {
-			ui.Text(c, s.monitor.Name).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
+			ui.Text(c, s.cur.monitor.Name).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
 			ui.Text(c, p.caption()).FontSize(10).FontWeight(500).TextColor(muted)
 		})
 		ui.Box(c).Size(24, 30).Center().TextColor(muted).Label("更多").Cursor(ui.CursorPointer).Children(func() {
@@ -134,17 +135,43 @@ func (p *panel) header(c *ui.Context) {
 	})
 }
 
+// monitorPicker switches the display the panel controls. One display needs
+// no switcher.
+func (p *panel) monitorPicker(c *ui.Context) {
+	s := p.s
+	if len(s.screens) < 2 {
+		return
+	}
+	ui.Row(c).Gap(6).Padding(0, 0, 12, 0).Children(func() {
+		for i, sc := range s.screens {
+			label := s.screenLabel(i)
+			e := chip(c.Key("screen-"+sc.monitor.ID), i == s.selected).Grow(1).Height(30).Label(label)
+			e.Children(func() {
+				ui.Text(c, label).FontSize(11).FontWeight(500).SingleLine()
+			})
+			if e.Clicked() {
+				s.selectScreen(i)
+			}
+		}
+	})
+}
+
 // caption sums the monitor up: "外接显示器 · HDMI · 4K · 160Hz".
 func (p *panel) caption() string {
-	parts := []string{"外接显示器"}
-	if p.s.monitor.Connection != "" {
-		parts = append(parts, p.s.monitor.Connection)
+	m := p.s.cur.monitor
+	kind := "外接显示器"
+	if m.Builtin {
+		kind = "内置显示器"
 	}
-	if label := display.SizeLabel(p.s.monitor.NativeSize(p.s.modes, p.s.current)); label != "" {
+	parts := []string{kind}
+	if m.Connection != "" {
+		parts = append(parts, m.Connection)
+	}
+	if label := display.SizeLabel(m.NativeSize(p.s.cur.modes, p.s.cur.current)); label != "" {
 		parts = append(parts, label)
 	}
-	if p.s.hasCurrent { // the current refresh rate, not the fastest of any mode (issue #2)
-		parts = append(parts, strconv.Itoa(p.s.current.RefreshRate)+"Hz")
+	if p.s.cur.hasCurrent { // the current refresh rate, not the fastest of any mode (issue #2)
+		parts = append(parts, strconv.Itoa(p.s.cur.current.RefreshRate)+"Hz")
 	}
 	return strings.Join(parts, " · ")
 }
@@ -228,11 +255,11 @@ func (p *panel) footer(c *ui.Context) {
 	s := p.s
 	text := ""
 	switch {
-	case s.link != nil && s.ddc != nil:
+	case s.cur.link != nil && s.cur.ddc != nil:
 		text = "已连接 · 局域网 + DDC/CI"
-	case s.link != nil:
+	case s.cur.link != nil:
 		text = "已通过局域网连接 · 澎湃 OS 遥控"
-	case s.ddc != nil:
+	case s.cur.ddc != nil:
 		text = "已通过 DDC/CI 连接"
 	case s.detectingAny():
 		text = "正在检测显示器…"
@@ -242,7 +269,7 @@ func (p *panel) footer(c *ui.Context) {
 		return
 	}
 	dot := ui.RGB(52, 199, 89)
-	if s.link == nil && s.ddc == nil {
+	if s.cur.link == nil && s.cur.ddc == nil {
 		dot = ui.RGB(255, 204, 0)
 	}
 	ui.Row(c).Gap(6).Padding(12, 0).Children(func() {
