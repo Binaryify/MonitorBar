@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet (macOS and Windows)
+        run: |
+          go vet ./...
+          GOOS=windows GOARCH=amd64 go vet ./...
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go tool mygo build -platform darwin/universal,windows/amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonitorBar
+          path: |
+            build/darwin-universal/*.dmg
+            build/windows-amd64/

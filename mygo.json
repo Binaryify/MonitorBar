@@ -1,0 +1,13 @@
+{
+  "name": "MonitorBar",
+  "identifier": "io.github.binaryify.MonitorBar",
+  "version": "1.0.0",
+  "copyright": "Copyright © 2026 binaryify",
+  "out": "build",
+  "macos": {
+    "infoPlist": {
+      "LSUIElement": true,
+      "NSLocalNetworkUsageDescription": "通过局域网切换显示器输入源、调节音量。"
+    }
+  }
+}

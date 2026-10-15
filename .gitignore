@@ -1,4 +1,4 @@
-.build/
-.swiftpm/
-dist/
+/build/
+/.mygo/
+mygo_windows_*.syso
 .DS_Store
