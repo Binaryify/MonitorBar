@@ -31,7 +31,7 @@ A menu bar (macOS) and tray (Windows) app to manage your monitor — <a href="#e
 - **macOS**（Apple Silicon / Intel，macOS 12+）：打开 `.dmg`，把 MonitorBar 拖进「应用程序」。应用未签名，首次打开需右键 → 打开。第一次连接显示器时允许「查找本地网络上的设备」。
 - **Windows 10 / 11**：把 `MonitorBar.exe` 和同目录的 `icon.png` 放到任意文件夹（推荐 `%LOCALAPPDATA%\Programs\MonitorBar`）后运行。托盘图标默认在 `^` 溢出区，可拖到任务栏常驻。
 
-开机自启：面板右上角「⋯」→「登录时启动」，或命令行 `MonitorBar --open-at-login on`（`off` 关闭）。
+开机自启：默认关闭，由用户自己选择开启——面板右上角「⋯」→「登录时启动」，或命令行 `MonitorBar --open-at-login on`（`off` 关闭）。
 
 ## 命令行
 
