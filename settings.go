@@ -21,7 +21,12 @@ type settings struct {
 	DayScene   string `json:"dayScene"`
 	NightScene string `json:"nightScene"`
 	AutoPeriod string `json:"autoPeriod"` // the period whose scene was applied last
-	path       string
+
+	// Sharing monitors with another computer (share.go).
+	Shared       []sharedScreen `json:"shared"`
+	PeerHost     string         `json:"peerHost"`     // e.g. "mini.local"
+	PullShortcut string         `json:"pullShortcut"` // brings the shared screens here
+	path         string
 }
 
 // dataDir is where MonitorBar keeps its files.
@@ -34,7 +39,7 @@ func dataDir() string {
 }
 
 func loadSettings() *settings {
-	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "日间", NightScene: "夜间",
+	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "日间", NightScene: "夜间", PullShortcut: defaultShortcut,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
 		_ = json.Unmarshal(data, s)

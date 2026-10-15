@@ -72,6 +72,8 @@ type store struct {
 	controls      []control
 	maxima        map[byte]int // the range of each VCP code
 
+	share shareState // sharing monitors with another computer
+
 	// The day and night start times as the time inputs edit them.
 	dayStart, nightStart time.Time
 	now                  func() time.Time // the clock, fixed in tests
@@ -104,6 +106,7 @@ func newStore() *store {
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
+	s.refreshScreens()
 	s.setGamma = func(b, w float64) error { return s.monitor.SetGamma(b, w) }
 	s.applyGamma()
 	s.usage = s.tracker.Recent(7)
@@ -547,6 +550,7 @@ func (s *store) displaysChanged() {
 	if s.monitor != previous {
 		s.probeDDC()
 	}
+	s.refreshScreens()
 }
 
 func (s *store) panelOpened() {
@@ -559,6 +563,8 @@ func (s *store) panelOpened() {
 		s.readVolume()
 	}
 	s.refreshDDC()
+	s.refreshScreens()
+	s.checkPeer()
 }
 
 // detect looks for every control channel again.

@@ -51,9 +51,22 @@ func (m Monitor) OpenDDC() (*DDC, error) {
 		t.close()
 		return nil, fmt.Errorf("display: no DDC/CI answer")
 	}
+	return newDDC(t), nil
+}
+
+func newDDC(t ddcTransport) *DDC {
 	d := &DDC{t: t, pending: map[byte]int{}, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	go d.writer()
-	return d, nil
+	return d
+}
+
+// SetNow writes a VCP code at once and reports whether it went out: for
+// commands that must land before the process exits.
+func (d *DDC) SetNow(code byte, value int) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.pending, code)
+	return d.t.write(code, value)
 }
 
 // Get reads a VCP code: its value, its maximum, and whether the monitor

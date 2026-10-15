@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -24,7 +25,7 @@ type app struct {
 	flyout *mygo.Window // the open panel, or nil
 }
 
-func (a *app) ready(show bool) {
+func (a *app) ready(show, pullNow bool) {
 	a.s = newStore()
 	a.s.redraw = func() {
 		if a.flyout != nil {
@@ -39,6 +40,7 @@ func (a *app) ready(show bool) {
 		log.Fatal("tray: ", err)
 	}
 	menu := mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "全部切到本机", Click: func(*mygo.MenuItem, *mygo.Window) { a.s.pullAll("菜单") }},
 		{Label: "打开 MonitorBar", Click: func(*mygo.MenuItem, *mygo.Window) { a.open() }},
 		mygo.Separator(),
 		{Label: "退出 MonitorBar", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
@@ -59,8 +61,15 @@ func (a *app) ready(show bool) {
 		a.s.displaysChanged()
 		a.s.redraw()
 	}
-	// Launching the app again (Start menu, Finder) opens its panel.
-	mygo.App.OnSecondInstance(func([]string, string) { a.open() })
+	// Launching the app again (Start menu, Finder) opens its panel; with
+	// --pull (a launcher's shortcut) it brings the shared screens here.
+	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		if slices.Contains(args, "--pull") {
+			a.s.pullAll("--pull")
+			return
+		}
+		a.open()
+	})
 	mygo.Screen.OnDisplaysChanged(changed)
 	mygo.Power.OnResume(changed)
 	go func() {
@@ -82,6 +91,11 @@ func (a *app) ready(show bool) {
 
 	a.s.detect()
 	a.s.autoCheck()
+	a.s.registerShortcut()
+	a.s.checkPeer()
+	if pullNow {
+		a.s.pullAll("--pull")
+	}
 	// Open the panel on the first launch (or with --show) so new users find the icon.
 	if show || !a.s.prefs.LaunchedBefore {
 		a.s.prefs.LaunchedBefore, a.s.dirty = true, true

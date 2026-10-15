@@ -40,6 +40,25 @@ func probe() {
 		d.Close()
 	}
 
+	fmt.Println("所有显示器（共享屏按 厂商:型号 识别）:")
+	for _, sc := range display.OnlineScreens() {
+		state := "排列中"
+		if !sc.Active {
+			state = "已移出排列"
+		}
+		ddc := "内建"
+		if !sc.Builtin {
+			ddc = "DDC/CI 未响应"
+			if d, err := display.OpenScreenDDC(sc.ID); err == nil {
+				if cur, max, ok := d.Get(display.VCPBrightness); ok {
+					ddc = fmt.Sprintf("DDC/CI 亮度 %d/%d", cur, max)
+				}
+				d.Close()
+			}
+		}
+		fmt.Printf("  %s  ID %d  %s  %s\n", sc.Key(), sc.ID, state, ddc)
+	}
+
 	start := time.Now()
 	host, err := mitv.Discover()
 	if err != nil {

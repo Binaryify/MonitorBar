@@ -6,6 +6,9 @@
 //	MonitorBar --show    run and open the panel
 //	MonitorBar --probe   print what it can see and control, then exit
 //	MonitorBar --open-at-login on|off   start at login or not, then exit
+//	MonitorBar --pull    bring the shared screens to this computer
+//	MonitorBar --release <vendor:model> [input]   (run by the other computer)
+//	MonitorBar --status  list this computer's displays as JSON
 package main
 
 import (
@@ -22,6 +25,16 @@ func main() {
 		probe()
 		return
 	}
+	// Run by the other computer over ssh: answer and exit, beside a
+	// running app.
+	if i := slices.Index(os.Args, "--release"); i > 0 {
+		releaseCommand(os.Args[i+1:])
+		return
+	}
+	if slices.Contains(os.Args[1:], "--status") {
+		statusCommand()
+		return
+	}
 	mygo.App.SetName("MonitorBar")
 	if i := slices.Index(os.Args, "--open-at-login"); i > 0 && i+1 < len(os.Args) {
 		setOpenAtLogin(os.Args[i+1] == "on")
@@ -34,7 +47,8 @@ func main() {
 	mygo.App.OnWindowAllClosed(func() {}) // the panel is the only window: keep running as it closes
 	a := &app{}
 	show := slices.Contains(os.Args[1:], "--show")
-	mygo.App.WhenReady(func() { a.ready(show) })
+	pullNow := slices.Contains(os.Args[1:], "--pull")
+	mygo.App.WhenReady(func() { a.ready(show, pullNow) })
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}

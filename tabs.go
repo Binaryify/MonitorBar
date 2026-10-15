@@ -15,6 +15,9 @@ import (
 
 func (p *panel) overview(c *ui.Context) {
 	s := p.s
+	if len(s.prefs.Shared) > 0 {
+		p.pullCard(c, false)
+	}
 	p.hero(c)
 	if sources := s.sources(); len(sources) > 0 {
 		card(c, func() {

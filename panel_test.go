@@ -201,9 +201,12 @@ func TestSnapshots(t *testing.T) {
 	if dir == "" {
 		t.Skip("set MONITORBAR_SNAPSHOTS to a directory")
 	}
-	files := map[string]string{"概览": "overview", "画面": "picture", "分辨率": "modes", "屏幕时间": "activity"}
+	files := map[string]string{"概览": "overview", "共享": "sharing", "画面": "picture", "分辨率": "modes", "屏幕时间": "activity"}
 	for _, tb := range tabs {
 		p, _ := testPanel(t)
+		if tb.name == "共享" {
+			seedShare(p)
+		}
 		p.s.prefs.Tab = tb.name
 		tt := newTester(p)
 		tt.SetScale(2)

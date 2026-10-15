@@ -13,7 +13,7 @@ import (
 
 type tab struct{ name, icon string }
 
-var tabs = []tab{{"概览", "display"}, {"画面", "sliders"}, {"分辨率", "aspect"}, {"屏幕时间", "chart"}}
+var tabs = []tab{{"概览", "display"}, {"共享", "swap"}, {"画面", "sliders"}, {"分辨率", "aspect"}, {"屏幕时间", "chart"}}
 
 const arrowHeight = 10
 
@@ -179,6 +179,8 @@ func (p *panel) content(c *ui.Context) {
 				sectionTitle(c, name)
 			}
 			switch name {
+			case "共享":
+				p.sharing(c)
 			case "画面":
 				p.picture(c)
 			case "分辨率":
