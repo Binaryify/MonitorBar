@@ -11,6 +11,16 @@ A menu bar (macOS) and tray (Windows) app to manage your monitor — <a href="#e
 <img src="docs/screenshots/activity.png" width="270" alt="屏幕时间">
 </p>
 
+## 为什么做这个
+
+REDMI 显示器不支持 DDC/CI。
+
+Mac 上常见的显示器工具（MonitorControl、BetterDisplay、Lunar 等）都靠 DDC/CI 控制显示器，所以在 REDMI 显示器上切换不了输入源，也调不了音量。
+
+不过 REDMI 显示器内置澎湃 OS，开机时会在局域网提供一个遥控接口。MonitorBar 通过这个接口切换输入源（包括 DP 和 USB-C）、调节音量，不依赖 DDC/CI。软件调光、色温、分辨率、屏幕时间这些通用功能也一起做了进去，并且有 Mac 和 Windows 两个版本：两台电脑接在同一台显示器上时，在任意一台上都能一键切到另一台。
+
+MonitorBar 只在 REDMI 显示器 G Pro 27U 2026 上测试过，不保证在你的显示器上能正常工作：不同型号的接口、信号源编号可能不一样。如果不能用，可以借助 AI 编程工具来适配：先运行 `MonitorBar --probe` 看看它识别到了什么，再让 AI 参照 `internal/mitv`（局域网接口）和 `internal/display`（系统显示 API）修改代码。项目结构见下面的[开发](#开发)一节。
+
 ## 功能
 
 | 分页 | 功能 |
@@ -84,7 +94,7 @@ go tool mygo build -platform darwin/universal,windows/amd64          # 打包两
 
 ## English
 
-MonitorBar manages an external monitor from the macOS menu bar or the Windows notification area. It switches inputs and changes volume over the LAN remote API of Xiaomi HyperOS monitors (no DDC/CI needed), dims and warms the picture through the gamma table, switches resolutions and refresh rates, and tracks screen time. It is one Go codebase built with [mygo](https://mygo.egoist.dev/), drawing native UI on both platforms; the Windows build cross-compiles from a Mac. See [Development](#开发) for build commands.
+REDMI monitors do not support DDC/CI, so the usual tools (MonitorControl, BetterDisplay, Lunar) cannot switch their inputs. They run HyperOS, though, whose LAN remote API can, DP and USB-C included. MonitorBar manages an external monitor from the macOS menu bar or the Windows notification area. It switches inputs and changes volume over the LAN remote API of Xiaomi HyperOS monitors (no DDC/CI needed), dims and warms the picture through the gamma table, switches resolutions and refresh rates, and tracks screen time. It is one Go codebase built with [mygo](https://mygo.egoist.dev/), drawing native UI on both platforms; the Windows build cross-compiles from a Mac. See [Development](#开发) for build commands.
 
 ## 许可证
 
