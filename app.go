@@ -82,6 +82,16 @@ func (a *app) ready(show bool) {
 
 	a.s.detect()
 	a.s.autoCheck()
+	go func() { // the built-in display's brightness, for following it
+		for range time.Tick(time.Second) {
+			mygo.RunOnMain(func() {
+				if a.s.prefs.FollowBuiltin && a.s.canFollow() {
+					a.s.followTick(display.BuiltinBrightness)
+					a.s.redraw()
+				}
+			})
+		}
+	}()
 	go func() { // a newer version: soon after launch, then every few hours
 		time.Sleep(10 * time.Second)
 		for {

@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,7 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 	t.Helper()
 	var gamma [2]float64
 	s := &store{
-		prefs:    &settings{SoftBrightness: 100},
+		prefs:    &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
 		tracker:  usage.Open(filepath.Join(t.TempDir(), "usage.json")),
 		redraw:   func() {},
 		setGamma: func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
@@ -240,6 +241,56 @@ func TestRedmi27NU(t *testing.T) {
 	}
 	if !tt.HasText("USB-C") {
 		t.Errorf("no USB-C input in %q", tt.Texts())
+	}
+}
+
+// Issue #3: the backlight follows the built-in display, easing over a few
+// seconds, and keeps a manual change until the built-in display changes.
+func TestFollowBuiltin(t *testing.T) {
+	if got := followTarget(0.5, 10, 90); got != 50 {
+		t.Errorf("followTarget(0.5, 10, 90) = %v, want 50", got)
+	}
+	p, _ := testPanel(t)
+	s := p.s
+	tt := newTester(p)
+	if err := tt.Click("画面"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.HasText("跟随内屏亮度") {
+		t.Fatal("the card shows without a built-in display and DDC/CI")
+	}
+	s.hasBuiltin, s.hasBrightness, s.brightness, s.lastBuiltin = true, true, 30, -1
+	tt.Frame()
+	if err := tt.Click("启用跟随内屏亮度"); err != nil {
+		t.Fatalf("no follow switch: %v in %q", err, tt.Texts())
+	}
+	tt.Frame()
+	builtin := 0.8
+	read := func() (float64, bool) { return builtin, true }
+	steps := 0
+	for ; steps < 30 && (steps == 0 || s.easing); steps++ {
+		before := s.brightness
+		s.followTick(read)
+		if jump := math.Abs(s.brightness - before); jump > 25 {
+			t.Fatalf("step %d jumped %v points", steps, jump)
+		}
+	}
+	if want := followTarget(0.8, s.prefs.FollowMin, s.prefs.FollowMax); s.brightness != want {
+		t.Fatalf("eased to %v after %d steps, want %v", s.brightness, steps, want)
+	}
+	s.setBrightness(40) // a manual change
+	for range 5 {
+		s.followTick(read)
+	}
+	if s.brightness != 40 {
+		t.Errorf("following undid a manual change while the built-in display stayed: %v", s.brightness)
+	}
+	builtin = 0.2
+	for range 30 {
+		s.followTick(read)
+	}
+	if want := followTarget(0.2, s.prefs.FollowMin, s.prefs.FollowMax); s.brightness != want {
+		t.Errorf("after the built-in display dimmed: %v, want %v", s.brightness, want)
 	}
 }
 

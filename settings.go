@@ -21,7 +21,12 @@ type settings struct {
 	DayScene   string `json:"dayScene"`
 	NightScene string `json:"nightScene"`
 	AutoPeriod string `json:"autoPeriod"` // the period whose scene was applied last
-	path       string
+
+	// Following the built-in display's brightness over DDC/CI (MacBooks).
+	FollowBuiltin bool    `json:"followBuiltin"`
+	FollowMin     float64 `json:"followMin"` // the external backlight at the built-in's darkest, %
+	FollowMax     float64 `json:"followMax"` // and at its brightest
+	path          string
 }
 
 // dataDir is where MonitorBar keeps its files.
@@ -35,6 +40,7 @@ func dataDir() string {
 
 func loadSettings() *settings {
 	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "日间", NightScene: "夜间",
+		FollowMin: 10, FollowMax: 100,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
 		_ = json.Unmarshal(data, s)

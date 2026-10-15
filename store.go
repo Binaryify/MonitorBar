@@ -82,6 +82,13 @@ type store struct {
 	update     *mygo.Update // a newer version, nil when up to date
 	installing bool
 	progress   int // percent downloaded
+
+	// Following the built-in display: whether there is one, its brightness
+	// last seen (-1 before any), and the backlight being eased toward.
+	hasBuiltin   bool
+	lastBuiltin  float64
+	followTarget float64
+	easing       bool
 }
 
 // control is a picture setting the monitor offers over DDC/CI.
@@ -109,6 +116,7 @@ func newStore() *store {
 		now:           time.Now,
 		launchAtLogin: mygo.App.OpenAtLogin(),
 		canUpdate:     mygo.Updater.Enabled(),
+		lastBuiltin:   -1,
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
@@ -540,6 +548,66 @@ func parseClock(text string, fallback int) time.Time {
 	return t
 }
 
+// MARK: Following the built-in display
+
+// canFollow tells whether following the built-in display is possible: a
+// MacBook's display to follow, and a backlight to set over DDC/CI.
+func (s *store) canFollow() bool { return s.hasBuiltin && s.hasBrightness }
+
+// followTick runs every second. A change of the built-in display's
+// brightness sets a new target, which the backlight eases toward; between
+// changes, a manual change of the backlight stays.
+func (s *store) followTick(builtin func() (float64, bool)) {
+	if !s.prefs.FollowBuiltin || !s.canFollow() {
+		return
+	}
+	b, ok := builtin()
+	if !ok {
+		return
+	}
+	if s.lastBuiltin < 0 || math.Abs(b-s.lastBuiltin) >= 0.005 {
+		s.lastBuiltin = b
+		s.followTarget, s.easing = followTarget(b, s.prefs.FollowMin, s.prefs.FollowMax), true
+	}
+	if !s.easing {
+		return
+	}
+	next := easeToward(s.brightness, s.followTarget)
+	if math.Round(next) != math.Round(s.brightness) {
+		s.setBrightness(next)
+	} else {
+		s.brightness = next
+	}
+	if next == s.followTarget {
+		s.easing = false
+	}
+}
+
+// followChanged restarts following from the built-in display's brightness.
+func (s *store) followChanged() {
+	s.lastBuiltin, s.dirty = -1, true
+}
+
+// followTarget maps the built-in display's brightness, 0...1, into the
+// external backlight's range, in percent.
+func followTarget(builtin, lo, hi float64) float64 {
+	return lo + (hi-lo)*min(max(builtin, 0), 1)
+}
+
+// easeToward moves a third of the way to the target each second, at least
+// one point, landing on it: a few seconds for any change, without jumps.
+func easeToward(current, target float64) float64 {
+	d := target - current
+	if math.Abs(d) <= 1 {
+		return target
+	}
+	step := d * 0.3
+	if math.Abs(step) < 1 {
+		step = math.Copysign(1, d)
+	}
+	return current + step
+}
+
 // MARK: Updates
 
 // checkUpdate asks the releases for a newer version, in the background;
@@ -615,6 +683,7 @@ func (s *store) sleepDisplay() { _ = display.SleepNow() }
 // MARK: Lifecycle
 
 func (s *store) refreshDisplay() {
+	_, s.hasBuiltin = display.BuiltinBrightness()
 	s.monitor = display.Target()
 	s.modes = s.monitor.Modes()
 	s.current, s.hasCurrent = s.monitor.CurrentMode()

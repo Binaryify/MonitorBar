@@ -29,7 +29,11 @@ func (p *panel) overview(c *ui.Context) {
 		})
 	}
 	if s.hasBrightness {
-		if (sliderCard{key: "backlight", title: "亮度", caption: "硬件背光 · DDC/CI", icon: "sun",
+		caption := "硬件背光 · DDC/CI"
+		if s.prefs.FollowBuiltin && s.canFollow() {
+			caption = "硬件背光 · 跟随内屏"
+		}
+		if (sliderCard{key: "backlight", title: "亮度", caption: caption, icon: "sun",
 			value: &s.brightness, lo: 0, hi: 100, step: 5}).show(c) {
 			s.setBrightness(s.brightness)
 		}
@@ -119,6 +123,9 @@ func (p *panel) scenes(c *ui.Context) {
 func (p *panel) picture(c *ui.Context) {
 	s := p.s
 	p.scenes(c)
+	if s.canFollow() {
+		p.followBuiltin(c)
+	}
 	p.autoSwitch(c)
 	if (sliderCard{key: "soft", title: "软件调光", caption: "在硬件亮度基础上再压暗，适合夜间", icon: "contrast",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
@@ -150,6 +157,37 @@ func (p *panel) picture(c *ui.Context) {
 	if reset.Clicked() {
 		s.resetSoftware()
 	}
+}
+
+// followBuiltin is the card that has the backlight follow a MacBook's own
+// display, whose brightness macOS sets by the ambient light.
+func (p *panel) followBuiltin(c *ui.Context) {
+	s := p.s
+	card(c, func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			icon(c, "sun").FontSize(13)
+			ui.Text(c, "跟随内屏亮度").FontSize(12).FontWeight(600).Grow(1)
+			if ui.Switch(c.Key("follow"), &s.prefs.FollowBuiltin).Label("启用跟随内屏亮度").Changed() {
+				s.followChanged()
+			}
+		})
+		if !s.prefs.FollowBuiltin {
+			ui.Text(c, "内屏开启自动亮度时，外接显示器的背光随之调节").FontSize(10).TextColor(muted)
+			return
+		}
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "外接亮度范围").FontSize(11)
+			ui.Spacer(c)
+			ui.Textf(c, "%d – %d", int(s.prefs.FollowMin), int(s.prefs.FollowMax)).FontSize(11).FontFeatures("tnum")
+		})
+		if ui.RangeSlider(c.Key("follow-range"), &s.prefs.FollowMin, &s.prefs.FollowMax, 0, 100, 1).Label("外接亮度范围").Changed() {
+			s.followChanged()
+		}
+		if s.lastBuiltin >= 0 {
+			ui.Textf(c, "内屏 %d%% → 外接 %d%%", int(math.Round(s.lastBuiltin*100)), int(math.Round(s.followTarget))).
+				FontSize(10).TextColor(muted)
+		}
+	})
 }
 
 // autoSwitch is the card that switches to the day and night scenes at set
