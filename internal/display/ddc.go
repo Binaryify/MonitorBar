@@ -117,6 +117,24 @@ func (d *DDC) writer() {
 	}
 }
 
+// inputOverrides names the inputs of monitor models that report them
+// differently from MCCS, keyed by the model's name as the system gives it.
+var inputOverrides = map[string]map[int]string{
+	"Redmi 27 NU": {0x10: "USB-C"}, // its USB-C reports as MCCS's second DP (issue #2)
+}
+
+// InputNameFor names an input of a monitor model, with its overrides.
+func InputNameFor(model string, code int) string {
+	for name, overrides := range inputOverrides {
+		if strings.EqualFold(strings.TrimSpace(model), name) {
+			if n, ok := overrides[code]; ok {
+				return n
+			}
+		}
+	}
+	return InputName(code)
+}
+
 // InputName names an MCCS input source code.
 func InputName(code int) string {
 	names := map[int]string{0x01: "VGA", 0x03: "DVI", 0x04: "DVI 2", 0x0F: "DP", 0x10: "DP 2",

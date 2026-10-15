@@ -36,7 +36,15 @@ func probe() {
 				fmt.Printf("DDC/CI %s: %d / %d\n", v.name, cur, max)
 			}
 		}
-		fmt.Println("DDC/CI 能力:", or(d.Capabilities(), "（未提供）"))
+		caps := d.Capabilities()
+		fmt.Println("DDC/CI 能力:", or(caps, "（未提供）"))
+		if ids := display.ParseCapabilities(caps)[display.VCPInput]; len(ids) > 0 {
+			fmt.Print("DDC/CI 输入源列表:")
+			for _, id := range ids {
+				fmt.Printf(" %s=0x%02X", display.InputNameFor(m.Name, id), id)
+			}
+			fmt.Println()
+		}
 		d.Close()
 	}
 

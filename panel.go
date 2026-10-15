@@ -140,15 +140,11 @@ func (p *panel) caption() string {
 	if p.s.monitor.Connection != "" {
 		parts = append(parts, p.s.monitor.Connection)
 	}
-	fastest := 0
-	for _, m := range p.s.modes {
-		fastest = max(fastest, m.RefreshRate)
-	}
 	if label := display.SizeLabel(p.s.monitor.NativeSize(p.s.modes, p.s.current)); label != "" {
 		parts = append(parts, label)
 	}
-	if fastest > 0 {
-		parts = append(parts, strconv.Itoa(fastest)+"Hz")
+	if p.s.hasCurrent { // the current refresh rate, not the fastest of any mode (issue #2)
+		parts = append(parts, strconv.Itoa(p.s.current.RefreshRate)+"Hz")
 	}
 	return strings.Join(parts, " · ")
 }

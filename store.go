@@ -346,7 +346,7 @@ func (s *store) probeDDC() {
 		d, err := m.OpenDDC()
 		var r ddcReading
 		if err == nil {
-			r = readDDC(d, true)
+			r = readDDC(d, m.Name, true)
 		}
 		s.post(func() {
 			s.probingDDC = false
@@ -365,7 +365,7 @@ type ddcReading struct {
 
 // readDDC reads the values the panel shows; with all, also the inputs the
 // capability string lists and which picture controls answer. It blocks.
-func readDDC(d *display.DDC, all bool) ddcReading {
+func readDDC(d *display.DDC, model string, all bool) ddcReading {
 	r := ddcReading{values: map[byte][2]int{}, refreshed: !all}
 	codes := []byte{display.VCPBrightness, display.VCPVolume, display.VCPInput}
 	if all {
@@ -373,7 +373,7 @@ func readDDC(d *display.DDC, all bool) ddcReading {
 			codes = append(codes, c.code)
 		}
 		for _, id := range display.ParseCapabilities(d.Capabilities())[display.VCPInput] {
-			r.inputs = append(r.inputs, mitv.Source{ID: id, Name: display.InputName(id)})
+			r.inputs = append(r.inputs, mitv.Source{ID: id, Name: display.InputNameFor(model, id)})
 		}
 	}
 	for _, code := range codes {
@@ -408,10 +408,8 @@ func (s *store) applyDDC(r ddcReading) {
 			s.volume, s.hasVolume = v, true
 		}
 	}
-	if v, ok := r.values[display.VCPInput]; ok && s.link == nil {
-		s.input = v[0] & 0xFF // some monitors put more in the high byte
-	}
 	if r.refreshed {
+		s.applyInput(r)
 		for i := range s.controls {
 			if v, ok := r.values[s.controls[i].code]; ok {
 				s.controls[i].value = float64(v[0])
@@ -420,10 +418,27 @@ func (s *store) applyDDC(r ddcReading) {
 		return
 	}
 	s.ddcInputs = r.inputs
+	s.applyInput(r)
 	s.controls = nil
 	for _, c := range controlCatalog {
 		if v, ok := r.values[c.code]; ok {
 			s.controls = append(s.controls, control{code: c.code, name: c.name, value: float64(v[0]), max: v[1]})
+		}
+	}
+}
+
+// applyInput highlights the input the monitor reports, when it is one of
+// those it lists. Some report something else (issue #2: 8 where it lists
+// 0x0F 0x10 0x11 0x12): the input chosen in the app stays highlighted then.
+func (s *store) applyInput(r ddcReading) {
+	v, ok := r.values[display.VCPInput]
+	if !ok || s.link != nil {
+		return
+	}
+	code := v[0] & 0xFF // some monitors put more in the high byte
+	for _, src := range s.ddcInputs {
+		if src.ID == code {
+			s.input = code
 		}
 	}
 }
@@ -434,8 +449,9 @@ func (s *store) refreshDDC() {
 	if d == nil || s.probingDDC {
 		return
 	}
+	model := s.monitor.Name
 	go func() {
-		r := readDDC(d, false)
+		r := readDDC(d, model, false)
 		s.post(func() {
 			if s.ddc == d {
 				s.applyDDC(r)

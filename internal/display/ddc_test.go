@@ -58,3 +58,15 @@ func TestSetCoalesces(t *testing.T) {
 		t.Errorf("writes = %v, want one write of 80", f.writes)
 	}
 }
+
+func TestInputNameFor(t *testing.T) {
+	if got := InputNameFor("Redmi 27 NU", 0x10); got != "USB-C" {
+		t.Errorf("Redmi 27 NU 0x10 = %q, want USB-C", got)
+	}
+	if got := InputNameFor("Redmi 27 NU", 0x11); got != "HDMI 1" {
+		t.Errorf("Redmi 27 NU 0x11 = %q, want HDMI 1", got)
+	}
+	if got := InputNameFor("Some Monitor", 0x10); got != "DP 2" {
+		t.Errorf("other models 0x10 = %q, want DP 2", got)
+	}
+}

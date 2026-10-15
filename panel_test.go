@@ -211,6 +211,38 @@ func TestUpdateBar(t *testing.T) {
 	}
 }
 
+// Issue #2: a monitor reporting an input it doesn't list keeps the one
+// chosen in the app highlighted; the header gives the current refresh rate.
+func TestRedmi27NU(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link, s.inputs = nil, nil
+	s.monitor = display.Monitor{Name: "Redmi 27 NU", Connection: "DP"}
+	s.ddcInputs = []mitv.Source{{ID: 0x11, Name: "HDMI 1"}, {ID: 0x12, Name: "HDMI 2"}, {ID: 0x0F, Name: "DP"}, {ID: 0x10, Name: "USB-C"}}
+	s.ddc = nil
+	s.input = 0x10
+	s.applyInput(ddcReading{values: map[byte][2]int{display.VCPInput: {8, 14}}})
+	if s.input != 0x10 {
+		t.Errorf("input = %#x after reading 8, want the chosen 0x10 kept", s.input)
+	}
+	s.applyInput(ddcReading{values: map[byte][2]int{display.VCPInput: {0x11, 14}}})
+	if s.input != 0x11 {
+		t.Errorf("input = %#x after reading 0x11, want 0x11", s.input)
+	}
+	for _, m := range s.modes {
+		if m.Width == 1920 && m.HiDPI() && m.RefreshRate == 60 {
+			s.current = m
+		}
+	}
+	tt := newTester(p)
+	if !tt.HasText("外接显示器 · DP · 4K · 60Hz") {
+		t.Errorf("header in %q, want the current 60Hz", tt.Texts())
+	}
+	if !tt.HasText("USB-C") {
+		t.Errorf("no USB-C input in %q", tt.Texts())
+	}
+}
+
 // TestSnapshots writes each tab as a PNG to $MONITORBAR_SNAPSHOTS, to look at.
 func TestSnapshots(t *testing.T) {
 	dir := os.Getenv("MONITORBAR_SNAPSHOTS")
