@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -97,17 +98,60 @@ func TestTabs(t *testing.T) {
 	}
 }
 
-func TestDisconnectedShowsNotice(t *testing.T) {
+// With no channel to the monitor, the panel shows what works and says
+// nothing about what doesn't.
+func TestNoChannelShowsNoUnsupportedText(t *testing.T) {
 	p, _ := testPanel(t)
 	p.s.link, p.s.inputs, p.s.hasVolume = nil, nil, false
 	tt := newTester(p)
-	for _, want := range []string{"硬件控制未就绪", "软件模式 · 未找到硬件控制通道"} {
-		if !tt.HasText(want) {
-			t.Errorf("missing %q", want)
+	for _, tab := range []string{"概览", "画面"} {
+		if err := tt.Click(tab); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		for _, text := range tt.Texts() {
+			for _, word := range []string{"不支持", "未找到", "未就绪", "需要显示器"} {
+				if strings.Contains(text, word) {
+					t.Errorf("tab %s shows %q", tab, text)
+				}
+			}
+		}
+		if tt.HasText("输入源") || tt.HasText("显示器音量") || tt.HasText("已通过局域网连接 · 澎湃 OS 遥控") {
+			t.Errorf("tab %s shows controls of a missing channel: %q", tab, tt.Texts())
 		}
 	}
-	if tt.HasText("输入源") || tt.HasText("显示器音量") {
-		t.Error("network controls show while disconnected")
+	if !tt.HasText("软件调光") {
+		t.Error("software dimming is missing")
+	}
+}
+
+// A monitor reached over DDC/CI alone gets its inputs, its backlight and
+// the picture controls it answers.
+func TestDDCOnly(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link, s.inputs = nil, nil
+	s.hasBrightness, s.brightness = true, 70
+	s.ddcInputs = []mitv.Source{{ID: 0x0F, Name: display.InputName(0x0F)}, {ID: 0x11, Name: display.InputName(0x11)}}
+	s.controls = []control{{code: display.VCPContrast, name: "对比度", value: 50, max: 100}}
+	tt := newTester(p)
+	for _, want := range []string{"输入源", "DDC/CI", "DP", "HDMI 1", "硬件背光 · DDC/CI", "70"} {
+		if !tt.HasText(want) {
+			t.Errorf("overview: missing %q in %q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("夜间"); err != nil {
+		t.Fatal(err)
+	}
+	if s.brightness != 30 || s.prefs.SoftBrightness != 100 {
+		t.Errorf("night scene: backlight %v, software %v; want the backlight dimmed", s.brightness, s.prefs.SoftBrightness)
+	}
+	if err := tt.Click("画面"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("对比度") || !tt.HasText("硬件 · DDC/CI") {
+		t.Errorf("picture: missing the contrast control in %q", tt.Texts())
 	}
 }
 

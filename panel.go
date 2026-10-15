@@ -103,8 +103,8 @@ func (p *panel) header(c *ui.Context) {
 		ui.Box(c).Size(24, 30).Center().TextColor(muted).Label("更多").Cursor(ui.CursorPointer).Children(func() {
 			icon(c, "ellipsis").FontSize(16)
 		}).Menu(func(m *ui.Menu) {
-			if m.Item("重新检测硬件控制").Chosen() {
-				s.connect()
+			if m.Item("重新检测显示器").Chosen() {
+				s.detect()
 			}
 			if m.Item("打开系统显示器设置…").Chosen() {
 				_ = mygo.Shell.OpenExternal(display.SettingsURL)
@@ -199,19 +199,33 @@ func (p *panel) content(c *ui.Context) {
 	})
 }
 
+// footer tells which channels reach the monitor. With none, it says
+// nothing: software dimming needs no explaining.
 func (p *panel) footer(c *ui.Context) {
 	s := p.s
-	dot, text := accent, "软件模式 · 未找到硬件控制通道"
+	text := ""
 	switch {
-	case s.hasHardwareControl():
-		dot, text = ui.RGB(52, 199, 89), "已通过局域网连接 · 澎湃 OS 遥控"
-	case s.detecting:
-		dot, text = ui.RGB(255, 204, 0), "正在检测显示器…"
+	case s.link != nil && s.ddc != nil:
+		text = "已连接 · 局域网 + DDC/CI"
+	case s.link != nil:
+		text = "已通过局域网连接 · 澎湃 OS 遥控"
+	case s.ddc != nil:
+		text = "已通过 DDC/CI 连接"
+	case s.detectingAny():
+		text = "正在检测显示器…"
+	}
+	if text == "" {
+		ui.Box(c).Height(12)
+		return
+	}
+	dot := ui.RGB(52, 199, 89)
+	if s.link == nil && s.ddc == nil {
+		dot = ui.RGB(255, 204, 0)
 	}
 	ui.Row(c).Gap(6).Padding(12, 0).Children(func() {
 		ui.Box(c).Size(6, 6).Radius(3).Background(dot)
 		ui.Text(c, text).FontSize(10).TextColor(muted).Grow(1)
-		if s.detecting {
+		if s.detectingAny() {
 			ui.Spinner(c).Size(12, 12)
 		}
 	})

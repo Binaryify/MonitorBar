@@ -74,10 +74,13 @@ func (a *app) ready(show bool) {
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		a.s.save()
 		display.RestoreGamma()
+		if a.s.ddc != nil {
+			a.s.ddc.Close()
+		}
 		a.tray.Destroy()
 	})
 
-	a.s.connect()
+	a.s.detect()
 	// Open the panel on the first launch (or with --show) so new users find the icon.
 	if show || !a.s.prefs.LaunchedBefore {
 		a.s.prefs.LaunchedBefore, a.s.dirty = true, true

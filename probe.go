@@ -25,6 +25,21 @@ func probe() {
 	fmt.Printf("原生分辨率: %d × %d（%s）\n", w, h, display.SizeLabel(w, h))
 	fmt.Printf("可用模式: %d 个  亮屏: %v  空闲: %.0f 秒\n", len(modes), !m.Asleep(), display.IdleSeconds())
 
+	if d, err := m.OpenDDC(); err != nil {
+		fmt.Println("DDC/CI: 显示器未响应")
+	} else {
+		for _, v := range []struct {
+			code byte
+			name string
+		}{{display.VCPBrightness, "亮度"}, {display.VCPContrast, "对比度"}, {display.VCPVolume, "音量"}, {display.VCPInput, "输入源"}} {
+			if cur, max, ok := d.Get(v.code); ok {
+				fmt.Printf("DDC/CI %s: %d / %d\n", v.name, cur, max)
+			}
+		}
+		fmt.Println("DDC/CI 能力:", or(d.Capabilities(), "（未提供）"))
+		d.Close()
+	}
+
 	start := time.Now()
 	host, err := mitv.Discover()
 	if err != nil {

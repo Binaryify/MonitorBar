@@ -36,7 +36,6 @@ func init() {
 		"minus":       `<path d="M5 12h14"/>`,
 		"plus":        `<path d="M5 12h14"/><path d="M12 5v14"/>`,
 		"check":       `<path d="M20 6 9 17l-5-5"/>`,
-		"alert":       `<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
 		"rotate":      `<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>`,
 		"contrast":    `<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12z"/>`,
 		"zoom":        `<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/>`,

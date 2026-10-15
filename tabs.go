@@ -16,11 +16,11 @@ import (
 func (p *panel) overview(c *ui.Context) {
 	s := p.s
 	p.hero(c)
-	if len(s.inputs) > 0 {
+	if sources := s.sources(); len(sources) > 0 {
 		card(c, func() {
-			cardTitle(c, "输入源", "plug", "局域网")
+			cardTitle(c, "输入源", "plug", s.inputChannel())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
-				for _, src := range s.inputs {
+				for _, src := range sources {
 					if chipText(c.Key(src.ID), src.Name, s.input == src.ID) {
 						s.selectInput(src)
 					}
@@ -28,10 +28,12 @@ func (p *panel) overview(c *ui.Context) {
 			})
 		})
 	}
-	if !s.hasHardwareControl() && !s.detecting {
-		p.controlNotice(c)
-	}
-	if (sliderCard{key: "brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
+	if s.hasBrightness {
+		if (sliderCard{key: "backlight", title: "亮度", caption: "硬件背光 · DDC/CI", icon: "sun",
+			value: &s.brightness, lo: 0, hi: 100, step: 5}).show(c) {
+			s.setBrightness(s.brightness)
+		}
+	} else if (sliderCard{key: "brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
 		s.applyGamma()
 	}
@@ -44,7 +46,7 @@ func (p *panel) overview(c *ui.Context) {
 // hero is a drawing of the monitor showing its current mode.
 func (p *panel) hero(c *ui.Context) {
 	s := p.s
-	glow := float32(s.prefs.SoftBrightness / 100)
+	glow := float32(s.effectiveBrightness() / 100)
 	title, caption := "—", ""
 	if s.hasCurrent {
 		m := s.current
@@ -74,25 +76,6 @@ func (p *panel) hero(c *ui.Context) {
 			ui.Text(c, "当前画面").FontSize(9).Bold().LetterSpacing(1.1).TextColor(muted).Grow(1)
 			if s.monitor.Connection != "" {
 				ui.Text(c, s.monitor.Connection).FontSize(9).FontWeight(600).TextColor(accent)
-			}
-		})
-	})
-}
-
-func (p *panel) controlNotice(c *ui.Context) {
-	s := p.s
-	card(c, func() {
-		ui.Row(c).Gap(6).TextColor(accent).Children(func() {
-			icon(c, "alert").FontSize(13)
-			ui.Text(c, "硬件控制未就绪").FontSize(12).FontWeight(600)
-		})
-		ui.Text(c, "局域网里没找到澎湃 OS 显示器，亮度已改用软件调光。请确认显示器已联网，然后重新检测。").
-			FontSize(11).TextColor(ui.RGBA(255, 255, 255, 0.7))
-		ui.Row(c).Children(func() {
-			b := chip(c, true).Padding(5, 12)
-			b.Children(func() { ui.Text(c, "重新检测").FontSize(11).FontWeight(500) })
-			if b.Clicked() {
-				s.connect()
 			}
 		})
 	})
@@ -149,7 +132,13 @@ func (p *panel) picture(c *ui.Context) {
 		}}).show(c) {
 		s.applyGamma()
 	}
-	ui.Text(c, "对比度、锐度、RGB 增益需要显示器支持 DDC/CI。").FontSize(11).TextColor(muted)
+	for i := range s.controls { // only what the monitor answers over DDC/CI
+		ctl := &s.controls[i]
+		if (sliderCard{key: "ddc-" + ctl.name, title: ctl.name, caption: "硬件 · DDC/CI", icon: "sliders",
+			value: &ctl.value, lo: 0, hi: float64(ctl.max), step: 1}).show(c) {
+			s.setControl(i)
+		}
+	}
 	reset := chip(c, false).Height(30)
 	reset.Children(func() {
 		ui.Row(c).Gap(6).Children(func() {
