@@ -204,10 +204,10 @@ func TestSnapshots(t *testing.T) {
 	files := map[string]string{"概览": "overview", "共享": "sharing", "画面": "picture", "分辨率": "modes", "屏幕时间": "activity"}
 	for _, tb := range tabs {
 		p, _ := testPanel(t)
+		p.s.prefs.Tab = tb.name
 		if tb.name == "共享" {
 			seedShare(p)
 		}
-		p.s.prefs.Tab = tb.name
 		tt := newTester(p)
 		tt.SetScale(2)
 		tt.Frame()

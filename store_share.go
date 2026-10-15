@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 
@@ -21,7 +22,8 @@ type shareState struct {
 	checking   bool
 	pulling    bool
 	results    []string // the last 切到本机, one line per screen
-	shortcutOn string   // the shortcut registered, "" when none
+	resultsAt  time.Time
+	shortcutOn string // the shortcut registered, "" when none
 }
 
 func (s *store) peerLink() peer.SSH { return peer.SSH{Host: s.prefs.PeerHost} }
@@ -83,35 +85,51 @@ func (s *store) pullScreens(screens []sharedScreen) {
 		results := pull(ops, screens)
 		shareLog("pull done: %s", strings.Join(results, " | "))
 		s.post(func() {
-			s.share.pulling, s.share.results = false, results
+			s.share.pulling, s.share.results, s.share.resultsAt = false, results, time.Now()
 			s.refreshScreens()
 			s.checkPeer()
 		})
 	}()
 }
 
-// localState names where a shared screen stands on this computer.
-func (s *store) localState(key string) string {
-	if sc, ok := display.FindScreen(s.share.screens, key); ok && sc.Active {
-		return "本机排列中"
+// screensChanged follows the displays changing here: the other computer
+// may have just taken a screen away, so the last outcome no longer holds
+// and the other side's state is asked again.
+func (s *store) screensChanged() {
+	s.refreshScreens()
+	if !s.share.pulling && time.Since(s.share.resultsAt) > 3*time.Second {
+		s.share.results = nil
 	}
-	if s.share.disabled[key] != 0 {
-		return "已让给对方"
-	}
-	return "本机无链路"
+	s.checkPeer()
 }
 
-// peerState names where a shared screen stands on the other computer.
-func (s *store) peerState(key string) string {
-	switch {
-	case s.prefs.PeerHost == "":
-		return ""
-	case s.share.peer == nil:
-		return "对方未连接"
-	case s.share.peer.Has(key):
-		return "对方排列中"
+// location says which computer a shared screen is on, as far as the two
+// arrangements tell: after 切到本机 only one of them keeps it. here is true
+// when it is this computer.
+func (s *store) location(key string) (text string, here bool) {
+	local := false
+	if sc, ok := display.FindScreen(s.share.screens, key); ok && sc.Active {
+		local = true
 	}
-	return "对方已让出"
+	if s.share.peer == nil { // the other side unknown: say what this side knows
+		if local {
+			return "本机已连接", true
+		}
+		if s.share.disabled[key] != 0 {
+			return "已让给另一台", false
+		}
+		return "本机无链路", false
+	}
+	remote, name := s.share.peer.Has(key), s.share.peer.Label()
+	switch {
+	case local && !remote:
+		return "在本机", true
+	case remote && !local:
+		return "在 " + name, false
+	case local && remote:
+		return "两台都连着", false
+	}
+	return "两台都未连接", false
 }
 
 // sharedIndex is the position of the screen in the settings, or -1.

@@ -550,7 +550,7 @@ func (s *store) displaysChanged() {
 	if s.monitor != previous {
 		s.probeDDC()
 	}
-	s.refreshScreens()
+	s.screensChanged()
 }
 
 func (s *store) panelOpened() {

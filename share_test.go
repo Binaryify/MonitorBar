@@ -161,9 +161,8 @@ func TestShareTab(t *testing.T) {
 	p, _ := testPanel(t)
 	seedShare(p)
 	tt := newTester(p)
-	for _, want := range []string{"切到本机", "全部切到本机", "快捷键 ⌃⌥⌘M", "A27U", "G Pro",
-		"DDC/CI · 本机 DP 2 / USB-C · 本机排列中 · 对方已让出", "局域网 · 本机 DP · 已让给对方 · 对方排列中",
-		"另一台电脑", "在线", "共享屏设置"} {
+	for _, want := range []string{"切到本机", "全部切到本机", "快捷键 ⌃⌥⌘M", "A27U", "G Pro", "在本机", "在 mini",
+		"DDC/CI · 本机接口 DP 2 / USB-C", "局域网 · 本机接口 DP", "另一台电脑", "在线", "共享屏设置"} {
 		if !tt.HasText(want) {
 			t.Errorf("missing %q in %q", want, tt.Texts())
 		}
@@ -191,5 +190,60 @@ func TestInputName(t *testing.T) {
 	}
 	if got := shortcutLabel("Ctrl+Alt+Cmd+M"); got != "⌃⌥⌘M" {
 		t.Errorf("shortcut label %q", got)
+	}
+}
+
+func TestLocation(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	here := display.Screen{ID: 3, Vendor: 25001, Model: 12300, Active: true}
+	cases := []struct {
+		name     string
+		local    []display.Screen
+		disabled map[string]uint32
+		peer     *peer.Status
+		want     string
+		wantHere bool
+	}{
+		{"here only", []display.Screen{here}, nil, &peer.Status{Host: "mini.local"}, "在本机", true},
+		{"there only", nil, map[string]uint32{keyA27U: 3}, &peer.Status{Host: "mini.local", Name: "Sqlver的Mac mini",
+			Screens: []peer.Screen{{Key: keyA27U, Active: true}}}, "在 Sqlver的Mac mini", false},
+		{"both", []display.Screen{here}, nil, &peer.Status{Host: "mini.local", Screens: []peer.Screen{{Key: keyA27U, Active: true}}}, "两台都连着", false},
+		{"peer unknown, here", []display.Screen{here}, nil, nil, "本机已连接", true},
+		{"peer unknown, given away", nil, map[string]uint32{keyA27U: 3}, nil, "已让给另一台", false},
+	}
+	for _, c := range cases {
+		s.share.screens, s.share.disabled, s.share.peer = c.local, c.disabled, c.peer
+		if got, h := s.location(keyA27U); got != c.want || h != c.wantHere {
+			t.Errorf("%s: location = %q, %v; want %q, %v", c.name, got, h, c.want, c.wantHere)
+		}
+	}
+}
+
+// A pull's outcome must not outlive the other computer taking the screens.
+func TestStaleResultsClear(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.share.results, s.share.resultsAt = []string{"A27U：已切到本机"}, time.Now()
+	s.screensChanged() // the pull's own display change, moments later
+	if len(s.share.results) == 0 {
+		t.Fatal("a fresh outcome was cleared")
+	}
+	s.share.resultsAt = time.Now().Add(-time.Minute)
+	s.screensChanged() // later: the other side took the screen
+	if len(s.share.results) != 0 {
+		t.Errorf("stale outcome kept: %q", s.share.results)
+	}
+}
+
+func TestOverviewShowsWhere(t *testing.T) {
+	p, _ := testPanel(t)
+	seedShare(p)
+	p.s.prefs.Tab = "概览"
+	tt := newTester(p)
+	for _, want := range []string{"A27U", "在本机", "G Pro", "在 mini", "全部切到本机"} {
+		if !tt.HasText(want) {
+			t.Errorf("missing %q in %q", want, tt.Texts())
+		}
 	}
 }

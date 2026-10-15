@@ -40,7 +40,16 @@ type Screen struct {
 // Status is the answer to --status.
 type Status struct {
 	Host    string   `json:"host"`
+	Name    string   `json:"name,omitempty"` // the computer's name, as the user set it
 	Screens []Screen `json:"screens"`
+}
+
+// Label names the other computer for the panel: its name, else its host.
+func (s Status) Label() string {
+	if s.Name != "" {
+		return s.Name
+	}
+	return strings.TrimSuffix(s.Host, ".local")
 }
 
 // Has reports whether the screen is in the other computer's arrangement.

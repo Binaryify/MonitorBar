@@ -33,13 +33,15 @@ func (p *panel) pullCard(c *ui.Context, detailed bool) {
 			ui.Text(c, "还没有共享屏。在「共享屏设置」里打开两台电脑共用的显示器。").FontSize(10).TextColor(muted)
 			return
 		}
-		if detailed {
-			ui.Column(c).Gap(8).Children(func() {
-				for _, sc := range s.prefs.Shared {
+		ui.Column(c).Gap(8).Children(func() {
+			for _, sc := range s.prefs.Shared {
+				if detailed {
 					p.sharedRow(c.Key(sc.Key), sc)
+				} else {
+					p.sharedLine(c.Key(sc.Key), sc)
 				}
-			})
-		}
+			}
+		})
 		btn := ui.Box(c.Key("pull-all")).Height(36).Radius(10).Center().Cursor(ui.CursorPointer).Label("全部切到本机")
 		if s.share.pulling {
 			btn.Background(ui.RGBA(255, 255, 255, 0.08))
@@ -66,25 +68,47 @@ func (p *panel) pullCard(c *ui.Context, detailed bool) {
 	})
 }
 
+// sharedLine is a shared screen on 概览: its name and where it is.
+func (p *panel) sharedLine(c *ui.Context, sc sharedScreen) {
+	where, here := p.s.location(sc.Key)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, sc.Name).FontSize(12).FontWeight(500).SingleLine().Grow(1)
+		locationPill(c, where, here)
+	})
+}
+
+// sharedRow is a shared screen on 共享: where it is, how it switches, and
+// its own 切到本机 when it is elsewhere.
 func (p *panel) sharedRow(c *ui.Context, sc sharedScreen) {
 	s := p.s
+	where, here := s.location(sc.Key)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Gap(3).Grow(1).Children(func() {
-			ui.Text(c, sc.Name).FontSize(12).FontWeight(600).SingleLine()
+		ui.Column(c).Gap(4).Grow(1).Children(func() {
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, sc.Name).FontSize(12).FontWeight(600).SingleLine()
+				locationPill(c, where, here)
+			})
 			channel := "DDC/CI"
 			if sc.Channel == channelLAN {
 				channel = "局域网"
 			}
-			states := []string{channel + " · 本机 " + inputName(sc, s.inputs), s.localState(sc.Key)}
-			if peer := s.peerState(sc.Key); peer != "" {
-				states = append(states, peer)
-			}
-			ui.Text(c, strings.Join(states, " · ")).FontSize(10).TextColor(muted).SingleLine()
+			ui.Text(c, channel+" · 本机接口 "+inputName(sc, s.inputs)).FontSize(10).TextColor(muted).SingleLine()
 		})
-		if chipText(c.Key("go"), "切到本机", false) && !s.share.pulling {
+		if !here && chipText(c.Key("go"), "切到本机", false) && !s.share.pulling {
 			s.pullScreen(sc.Key)
 		}
 	})
+}
+
+// locationPill marks where a screen is, lit when it is here.
+func locationPill(c *ui.Context, text string, here bool) {
+	pill := ui.Box(c).Height(20).PaddingX(8).Radius(10).Center()
+	if here {
+		pill.Background(accent.Alpha(0.18)).TextColor(accent)
+	} else {
+		pill.Background(ui.RGBA(255, 255, 255, 0.07)).TextColor(muted)
+	}
+	pill.Children(func() { ui.Text(c, text).FontSize(10).FontWeight(600).SingleLine() })
 }
 
 // peerCard sets and checks the other computer.
@@ -116,7 +140,7 @@ func (p *panel) peerCard(c *ui.Context) {
 		})
 		switch {
 		case s.share.peer != nil:
-			ui.Text(c, fmt.Sprintf("%s · %d 块外接屏在排列中", s.share.peer.Host, activeCount(s.share.peer.Screens))).FontSize(10).TextColor(muted)
+			ui.Text(c, fmt.Sprintf("%s · %d 块外接屏在排列中", s.share.peer.Label(), activeCount(s.share.peer.Screens))).FontSize(10).TextColor(muted)
 		case s.share.peerErr != "":
 			ui.Text(c, s.share.peerErr).FontSize(10).TextColor(muted)
 		}

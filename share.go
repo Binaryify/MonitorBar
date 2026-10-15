@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -141,7 +142,7 @@ func releaseCommand(args []string) {
 // statusCommand is "--status": the displays in this computer's arrangement.
 func statusCommand() {
 	host, _ := os.Hostname()
-	st := peer.Status{Host: host}
+	st := peer.Status{Host: host, Name: or(modelName(), computerName())}
 	for _, sc := range display.OnlineScreens() {
 		if !sc.Builtin {
 			st.Screens = append(st.Screens, peer.Screen{Key: sc.Key(), Active: sc.Active})
@@ -149,6 +150,33 @@ func statusCommand() {
 	}
 	out, _ := json.Marshal(st)
 	fmt.Println(string(out))
+}
+
+// modelName is the kind of Mac, e.g. "MacBook Pro" or "Mac mini": how
+// people tell their two computers apart.
+func modelName() string {
+	out, err := exec.Command("/usr/sbin/system_profiler", "SPHardwareDataType", "-json").Output()
+	if err != nil {
+		return ""
+	}
+	var data struct {
+		Hardware []struct {
+			MachineName string `json:"machine_name"`
+		} `json:"SPHardwareDataType"`
+	}
+	if json.Unmarshal(out, &data) != nil || len(data.Hardware) == 0 {
+		return ""
+	}
+	return data.Hardware[0].MachineName
+}
+
+// computerName is the name set in System Settings, e.g. "afer的MacBook Pro".
+func computerName() string {
+	out, err := exec.Command("/usr/sbin/scutil", "--get", "ComputerName").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func othersActive(screens []display.Screen, id uint32) bool {
