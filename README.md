@@ -39,6 +39,18 @@ MonitorBar 只在 REDMI 显示器 G Pro 27U 2026 上测试过，不保证在你�
 - 显示器不支持的功能不会出现在界面上。
 - 单个可执行文件，无 webview，空闲时不占 CPU；中文界面，深色主题。
 
+### 普通显示器也能用
+
+不是澎湃 OS、也不支持 DDC/CI 的显示器同样可以用 MonitorBar，只是功能少一些：
+
+| 显示器 | 可用 | 不可用 |
+| --- | --- | --- |
+| 澎湃 OS 显示器 | 输入源、音量、软件调光、色温、场景、分辨率、屏幕时间 | 硬件背光（除非同时支持 DDC/CI） |
+| 支持 DDC/CI 的显示器 | 全部功能，亮度调的是硬件背光 | — |
+| 两者都不支持的普通显示器 | 软件调光、色温、场景与自动切换、分辨率与刷新率、屏幕时间 | 切换输入源、调音量、硬件背光、跟随内屏亮度 |
+
+软件调光只是让画面变暗，背光亮度不变，所以调得很暗时对比度会下降。不确定显示器支持哪些通道时，运行 `MonitorBar --probe` 查看。
+
 ## 安装
 
 从 [Releases](https://github.com/binaryify/MonitorBar/releases) 或 [CI 产物](https://github.com/binaryify/MonitorBar/actions) 下载：
@@ -127,7 +139,7 @@ git tag v1.0.0 && git push origin v1.0.0
 
 ## English
 
-REDMI monitors do not support DDC/CI, so the usual tools (MonitorControl, BetterDisplay, Lunar) cannot switch their inputs. They run HyperOS, though, whose LAN remote API can, DP and USB-C included. MonitorBar manages an external monitor from the macOS menu bar or the Windows notification area. It switches inputs and changes volume over the LAN remote API of Xiaomi HyperOS monitors, or over DDC/CI on monitors that support it (backlight and picture controls too), dims and warms the picture through the gamma table, switches resolutions and refresh rates, and tracks screen time. It is one Go codebase built with [mygo](https://mygo.egoist.dev/), drawing native UI on both platforms; the Windows build cross-compiles from a Mac. See [Development](#开发) for build commands.
+REDMI monitors do not support DDC/CI, so the usual tools (MonitorControl, BetterDisplay, Lunar) cannot switch their inputs. They run HyperOS, though, whose LAN remote API can, DP and USB-C included. MonitorBar manages an external monitor from the macOS menu bar or the Windows notification area. It switches inputs and changes volume over the LAN remote API of Xiaomi HyperOS monitors, or over DDC/CI on monitors that support it (backlight and picture controls too), dims and warms the picture through the gamma table, switches resolutions and refresh rates, and tracks screen time. Monitors with neither HyperOS nor DDC/CI work too, with fewer features: dimming, color temperature, scenes, resolutions and screen time still work, while input switching, volume and hardware backlight do not. It is one Go codebase built with [mygo](https://mygo.egoist.dev/), drawing native UI on both platforms; the Windows build cross-compiles from a Mac. See [Development](#开发) for build commands.
 
 ## 许可证
 
