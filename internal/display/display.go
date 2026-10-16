@@ -1,7 +1,6 @@
-// Package display reads and changes the target monitor through the
-// operating system: its modes, its gamma table and whether it is lit.
-// display_darwin.go and display_windows.go implement Target and the
-// Monitor methods.
+// Package display reads and changes monitors through the operating system:
+// their modes, gamma tables and whether they are lit. display_darwin.go and
+// display_windows.go implement Monitors and the Monitor methods.
 package display
 
 import (
@@ -14,14 +13,61 @@ import (
 // milder one was applied: Windows keeps gamma ramps near the identity.
 var ErrGammaLimited = errors.New("display: the system limited the dimming")
 
-// Monitor is the external display the app manages.
+// Monitor is one connected display.
 type Monitor struct {
 	Name       string // e.g. "Mi Monitor"
 	Connection string // e.g. "HDMI", or "" when unknown
+	// ID stays the same across launches and replugs, so a display keeps
+	// its settings. Two identical panels with no serial get "#2", "#3", …
+	ID      string
+	Builtin bool
 	// Native is the panel's own resolution where the system tells it
 	// (Windows, from the EDID), zero otherwise.
 	NativeWidth, NativeHeight int
 	handle                    handle
+	vendor, model, serial     uint32
+	slot                      int  // index among external, or among builtin
+	twin                      int  // index among displays with the same identity
+	primary                   bool // Windows: the primary adapter
+	x, y                      int  // desktop origin, for ordering
+}
+
+// SameOutput reports whether a and b are the same output. A replug keeps
+// the ID and gets a new handle; a mode change keeps both.
+func (m Monitor) SameOutput(o Monitor) bool { return m.handle == o.handle }
+
+// arrange puts external displays first, then left to right.
+func arrange(monitors []Monitor) []Monitor {
+	slices.SortStableFunc(monitors, func(a, b Monitor) int {
+		if a.Builtin != b.Builtin {
+			if a.Builtin {
+				return 1
+			}
+			return -1
+		}
+		if a.x != b.x {
+			return a.x - b.x
+		}
+		return a.y - b.y
+	})
+	return monitors
+}
+
+// uniqueIDs gives a repeated ID a "#2" suffix. The first keeps the bare ID.
+func uniqueIDs(monitors []Monitor) []Monitor {
+	seen := map[string]int{}
+	for i := range monitors {
+		id := monitors[i].ID
+		if id == "" {
+			id = fmt.Sprintf("display-%d", i+1)
+		}
+		seen[id]++
+		if seen[id] > 1 {
+			id = fmt.Sprintf("%s#%d", id, seen[id])
+		}
+		monitors[i].ID = id
+	}
+	return monitors
 }
 
 // NativeSize is the monitor's own resolution: what the system reports, or
