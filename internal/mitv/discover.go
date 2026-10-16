@@ -3,6 +3,7 @@ package mitv
 import (
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -12,9 +13,27 @@ import (
 var ErrNotFound = errors.New("mitv: no monitor found")
 
 // IsMonitor tells a monitor from the other devices with the same remote
-// API, such as TVs: MonitorBar must never switch a TV in another room.
-func IsMonitor(name string) bool {
+// API, such as TVs: MonitorBar must never switch a TV in another room. A
+// monitor's name says so, unless its owner renamed it (#5); then its DP or
+// USB-C input does, which TVs don't have.
+func (l *Link) IsMonitor() bool {
+	name, err := l.DeviceName()
+	if err != nil {
+		return false
+	}
+	if namedMonitor(name) {
+		return true
+	}
+	sources, err := l.Sources()
+	return err == nil && hasMonitorInput(sources)
+}
+
+func namedMonitor(name string) bool {
 	return strings.Contains(name, "显示器") || strings.Contains(strings.ToLower(name), "monitor")
+}
+
+func hasMonitorInput(sources []Source) bool {
+	return slices.ContainsFunc(sources, func(s Source) bool { return s.ID == SourceDP || s.ID == SourceUSBC })
 }
 
 // Discover returns the IPv4 address of a HyperOS monitor by probing every
@@ -36,7 +55,7 @@ func Discover() (string, error) {
 				return
 			}
 			conn.Close()
-			if name, err := New(host).DeviceName(); err == nil && IsMonitor(name) {
+			if New(host).IsMonitor() {
 				mu.Lock()
 				monitor = host
 				mu.Unlock()

@@ -223,7 +223,7 @@ func (s *store) connect() {
 	go func() {
 		link := mitv.New(cached)
 		// The host found last time must still be a monitor: addresses move.
-		if name, err := link.DeviceName(); cached == "" || err != nil || !mitv.IsMonitor(name) {
+		if cached == "" || !link.IsMonitor() {
 			link = nil
 			if host, err := mitv.Discover(); err == nil {
 				link = mitv.New(host)

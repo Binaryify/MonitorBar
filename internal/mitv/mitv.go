@@ -3,6 +3,7 @@
 package mitv
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,17 @@ type Source struct {
 	ID   int
 	Name string
 }
+
+// The ids of the monitor-only inputs.
+const (
+	SourceDP   = 29
+	SourceUSBC = 30
+)
+
+// sourceNames corrects the names firmware reports: the ids come from
+// MStar's TV inputs, where 29 is DVI, and older monitor firmware still
+// names the DP input after it (#6).
+var sourceNames = map[int]string{SourceDP: "DP"}
 
 // Link is a client for one device.
 type Link struct {
@@ -55,7 +67,7 @@ func (l *Link) Sources() ([]Source, error) {
 	}
 	sources := make([]Source, len(data.SourceList))
 	for i, s := range data.SourceList {
-		sources[i] = Source{ID: s.SourceID, Name: s.SourceName}
+		sources[i] = Source{ID: s.SourceID, Name: cmp.Or(sourceNames[s.SourceID], s.SourceName)}
 	}
 	return sources, nil
 }
