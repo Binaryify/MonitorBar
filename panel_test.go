@@ -88,7 +88,7 @@ func TestTabs(t *testing.T) {
 	p, _ := testPanel(t)
 	tt := newTester(p)
 	for tab, want := range map[string][]string{
-		"画面":   {"软件调光", "色温", "标准", "恢复软件调整"},
+		"画面":   {"色温", "标准", "恢复软件调整"},
 		"分辨率":  {"刷新率", "160 Hz", "HiDPI（清晰）", "渲染 3840×2160", "标准"},
 		"屏幕时间": {"今日亮屏", "3 小时 0 分", "最近 7 天", "日均 5 小时 30 分"},
 	} {
@@ -126,7 +126,11 @@ func TestNoChannelShowsNoUnsupportedText(t *testing.T) {
 			t.Errorf("tab %s shows controls of a missing channel: %q", tab, tt.Texts())
 		}
 	}
-	if !tt.HasText("软件调光") {
+	if err := tt.Click("概览"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("软件调光 · Gamma") {
 		t.Error("software dimming is missing")
 	}
 }
@@ -141,7 +145,7 @@ func TestDDCOnly(t *testing.T) {
 	s.ddcInputs = []mitv.Source{{ID: 0x0F, Name: display.InputName(0x0F)}, {ID: 0x11, Name: display.InputName(0x11)}}
 	s.controls = []control{{code: display.VCPContrast, name: "对比度", value: 50, max: 100}}
 	tt := newTester(p)
-	for _, want := range []string{"输入源", "DDC/CI", "DP", "HDMI 1", "硬件背光 · DDC/CI", "70"} {
+	for _, want := range []string{"输入源", "DDC/CI", "DP", "HDMI 1", "组合 · 硬件背光 + 软件调光", "85"} {
 		if !tt.HasText(want) {
 			t.Errorf("overview: missing %q in %q", want, tt.Texts())
 		}
@@ -362,5 +366,117 @@ func TestNoticeGrowsPanelWithoutInput(t *testing.T) {
 	}
 	if p.height <= before {
 		t.Fatalf("height stayed %d after the notice appeared", p.height)
+	}
+}
+
+// The combined brightness puts the backlight above the switchover and
+// software dimming below it, both ways (#9).
+func TestCombinedBrightness(t *testing.T) {
+	for _, c := range []struct{ combined, hardware, soft float64 }{
+		{100, 100, 100},
+		{75, 50, 100},
+		{50, 0, 100},
+		{25, 0, 60},
+		{0, 0, softMin},
+	} {
+		if h, s := split(c.combined); h != c.hardware || s != c.soft {
+			t.Errorf("split(%v) = %v, %v; want %v, %v", c.combined, h, s, c.hardware, c.soft)
+		}
+		if got := combine(c.hardware, c.soft); got != c.combined {
+			t.Errorf("combine(%v, %v) = %v; want %v", c.hardware, c.soft, got, c.combined)
+		}
+	}
+
+	p, gamma := testPanel(t)
+	s := p.s
+	s.hasBrightness, s.brightness = true, 70
+	s.stepBrightness(-60) // from 85 to 25: the backlight at its minimum, and software dimming
+	if s.brightness != 0 || s.prefs.SoftBrightness != 60 || gamma[0] != 0.6 {
+		t.Errorf("at 25: backlight %v, software %v, gamma %v", s.brightness, s.prefs.SoftBrightness, *gamma)
+	}
+	s.stepBrightness(35) // to 60: the software dimming lifts
+	if s.brightness != 20 || s.prefs.SoftBrightness != 100 {
+		t.Errorf("at 60: backlight %v, software %v", s.brightness, s.prefs.SoftBrightness)
+	}
+}
+
+// Every tab is as tall as the overview, so the panel keeps its height and
+// long tabs scroll (#9).
+func TestTabsShareTheOverviewsHeight(t *testing.T) {
+	p, _ := testPanel(t)
+	p.maxContent = 2000
+	tt := newTester(p)
+	want := p.height
+	for _, tab := range []string{"画面", "分辨率", "屏幕时间", "概览"} {
+		if err := tt.Click(tab); err != nil {
+			t.Fatal(err)
+		}
+		for range 4 {
+			tt.Frame()
+		}
+		if p.height != want {
+			t.Errorf("tab %s: panel %d high, want the overview's %d", tab, p.height, want)
+		}
+	}
+}
+
+// A shortcut records the keys pressed with Ctrl, Option or Command; Esc
+// keeps the old ones and Delete clears them (#9).
+func TestRecordShortcut(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	tt := newTester(p)
+	if err := tt.Click("画面"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText(keysLabel("Ctrl+Alt+Up")) {
+		t.Fatalf("the default brightness shortcut is missing in %q", tt.Texts())
+	}
+	record := func() {
+		t.Helper()
+		if err := tt.Click("亮度 +快捷键"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if s.recording != "brightnessUp" {
+			t.Fatalf("recording %q after the click", s.recording)
+		}
+	}
+	record()
+	tt.Key(ui.Shift, ui.KeyB) // Shift alone would take B from every app
+	if s.recording == "" {
+		t.Error("Shift+B ended the recording")
+	}
+	tt.Key(ui.Ctrl|ui.Alt, ui.KeyB)
+	tt.Frame()
+	if got := s.prefs.keys(shortcuts[0]); got != "Ctrl+Alt+B" || s.recording != "" {
+		t.Errorf("after Ctrl+Alt+B: keys %q, recording %q", got, s.recording)
+	}
+	record()
+	tt.Key(0, ui.KeyEscape)
+	if got := s.prefs.keys(shortcuts[0]); got != "Ctrl+Alt+B" || s.recording != "" {
+		t.Errorf("after Esc: keys %q, recording %q", got, s.recording)
+	}
+	record()
+	tt.Key(0, ui.KeyDelete)
+	tt.Frame()
+	if got := s.prefs.keys(shortcuts[0]); got != "" || !tt.HasText("未设置") {
+		t.Errorf("after Delete: keys %q in %q", got, tt.Texts())
+	}
+}
+
+func TestStepVolume(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil // DDC/CI, without the LAN remote's key presses
+	s.stepVolume(5)
+	if s.volume != 85 {
+		t.Errorf("volume %v after +5 from 80", s.volume)
+	}
+	s.volume = 98
+	s.stepVolume(5)
+	if s.volume != 100 {
+		t.Errorf("volume %v after +5 from 98", s.volume)
 	}
 }

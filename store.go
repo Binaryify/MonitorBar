@@ -56,8 +56,14 @@ type store struct {
 
 	usage         []usage.Day
 	launchAtLogin bool
-	notice        string
-	dirty         bool // prefs changed since the last save
+
+	// Shortcuts: those bound, by id, and the one the panel records keys for.
+	bindShortcuts bool // false in tests, which have no app to bind them
+	registered    map[string]string
+	recording     string
+
+	notice string
+	dirty  bool // prefs changed since the last save
 
 	volumeTarget atomic.Int64
 	deviceVolume int // the display's volume as last known
@@ -118,6 +124,7 @@ func newStore() *store {
 		launchAtLogin: mygo.App.OpenAtLogin(),
 		canUpdate:     mygo.Updater.Enabled(),
 		lastBuiltin:   -1,
+		registered:    map[string]string{},
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
@@ -152,6 +159,7 @@ func (s *store) setWarmth(percent float64) {
 func (s *store) apply(sc scene) {
 	if s.hasBrightness {
 		s.setBrightness(sc.brightness)
+		s.prefs.SoftBrightness = 100 // a scene's brightness is all backlight
 	} else {
 		s.prefs.SoftBrightness = sc.brightness
 	}
@@ -160,7 +168,60 @@ func (s *store) apply(sc scene) {
 }
 
 func (s *store) isActive(sc scene) bool {
-	return math.Abs(s.effectiveBrightness()-sc.brightness) < 1 && math.Abs(s.prefs.Warmth-sc.warmth) < 1
+	return math.Abs(s.effectiveBrightness()-sc.brightness) < 1 && math.Abs(s.prefs.Warmth-sc.warmth) < 1 &&
+		(!s.hasBrightness || s.prefs.SoftBrightness >= 99.5)
+}
+
+// Combined brightness, as BetterDisplay and MonitorControl have it (#9):
+// one scale over the backlight and software dimming. Above the switchover
+// the backlight goes from its minimum to its maximum; below it, the
+// backlight stays at its minimum and the gamma table dims, down to softMin.
+const (
+	switchover = 50.0
+	softMin    = 20.0 // the darkest software dimming, %
+)
+
+// combine places a backlight and a software dimming, in percent, on the
+// combined scale.
+func combine(hardware, soft float64) float64 {
+	if hardware > 0 || soft >= 100 {
+		return switchover + hardware*(100-switchover)/100
+	}
+	return (soft - softMin) / (100 - softMin) * switchover
+}
+
+// split is the backlight and the software dimming of a combined brightness.
+func split(combined float64) (hardware, soft float64) {
+	if combined >= switchover {
+		return (combined - switchover) / (100 - switchover) * 100, 100
+	}
+	return 0, softMin + max(combined, 0)/switchover*(100-softMin)
+}
+
+func (s *store) combinedBrightness() float64 { return combine(s.brightness, s.prefs.SoftBrightness) }
+
+// setCombined sets the backlight and the software dimming of a combined
+// brightness, writing only what changed: DDC/CI is slow.
+func (s *store) setCombined(combined float64) {
+	hardware, soft := split(combined)
+	if hardware != s.brightness {
+		s.setBrightness(hardware)
+	}
+	if soft != s.prefs.SoftBrightness {
+		s.prefs.SoftBrightness = soft
+		s.applyGamma()
+	}
+}
+
+// stepBrightness moves the brightness by delta points, on the combined
+// scale when DDC/CI reaches the backlight.
+func (s *store) stepBrightness(delta float64) {
+	if s.hasBrightness {
+		s.setCombined(min(max(s.combinedBrightness()+delta, 0), 100))
+		return
+	}
+	s.prefs.SoftBrightness = min(max(s.prefs.SoftBrightness+delta, softMin), 100)
+	s.applyGamma()
 }
 
 // effectiveBrightness is the backlight's when DDC/CI reaches it, else the
@@ -271,6 +332,13 @@ func (s *store) selectInput(src mitv.Source) {
 			s.post(func() { s.notice = "切换到 " + src.Name + " 失败：显示器没有响应" })
 		}
 	}()
+}
+
+// stepVolume moves the volume by delta points, when it can be set.
+func (s *store) stepVolume(delta float64) {
+	if s.hasVolume {
+		s.setVolume(min(max(s.volume+delta, 0), 100))
+	}
 }
 
 func (s *store) setVolume(percent float64) {
@@ -572,6 +640,10 @@ func (s *store) followTick(builtin func() (float64, bool)) {
 	}
 	if !s.easing {
 		return
+	}
+	if s.prefs.SoftBrightness < 100 { // following sets the backlight alone, with no software dimming
+		s.prefs.SoftBrightness = 100
+		s.applyGamma()
 	}
 	next := easeToward(s.brightness, s.followTarget)
 	if math.Round(next) != math.Round(s.brightness) {

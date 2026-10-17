@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -29,13 +30,19 @@ func (p *panel) overview(c *ui.Context) {
 		})
 	}
 	if s.hasBrightness {
-		caption := "硬件背光 · DDC/CI"
-		if s.prefs.FollowBuiltin && s.canFollow() {
-			caption = "硬件背光 · 跟随内屏"
+		combined := s.combinedBrightness()
+		caption := "组合 · 硬件背光 + 软件调光"
+		switch {
+		case combined < switchover-0.5:
+			caption = "最小硬件值 · 软件调光"
+		case combined <= switchover+0.5:
+			caption = "最小硬件值"
+		case s.prefs.FollowBuiltin && s.canFollow():
+			caption = "组合 · 跟随内屏"
 		}
 		if (sliderCard{key: "backlight", title: "亮度", caption: caption, icon: "sun",
-			value: &s.brightness, lo: 0, hi: 100, step: 5}).show(c) {
-			s.setBrightness(s.brightness)
+			value: &combined, lo: 0, hi: 100, step: 5}).show(c) {
+			s.setCombined(combined)
 		}
 	} else if (sliderCard{key: "brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
@@ -127,10 +134,6 @@ func (p *panel) picture(c *ui.Context) {
 		p.followBuiltin(c)
 	}
 	p.autoSwitch(c)
-	if (sliderCard{key: "soft", title: "软件调光", caption: "在硬件亮度基础上再压暗，适合夜间", icon: "contrast",
-		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
-		s.applyGamma()
-	}
 	if (sliderCard{key: "warmth", title: "色温", caption: "向右更暖，减少蓝光", icon: "thermometer",
 		value: &s.prefs.Warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
 			if v < 1 {
@@ -157,6 +160,65 @@ func (p *panel) picture(c *ui.Context) {
 	if reset.Clicked() {
 		s.resetSoftware()
 	}
+	p.shortcuts(c)
+}
+
+// shortcuts lists the brightness and volume shortcuts. Clicking one records
+// keys for it: a combination with Ctrl, Option or Command sets it, Esc
+// cancels and Delete clears it.
+func (p *panel) shortcuts(c *ui.Context) {
+	s := p.s
+	card(c, func() {
+		cardTitle(c, "快捷键", "keyboard", "点击后按下组合键")
+		for _, sc := range shortcuts {
+			ui.Row(c.Key(sc.id)).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, sc.title).FontSize(11).Grow(1)
+				recording := s.recording == sc.id
+				label := keysLabel(s.prefs.keys(sc))
+				if recording {
+					label = "请按组合键…"
+				}
+				e := chip(c.Key(sc.id+"-keys"), recording).Width(132).Height(26).Label(sc.title + "快捷键").Focusable()
+				e.Children(func() { ui.Text(c, label).FontSize(11).FontWeight(500).SingleLine() })
+				e.HandleInput(func(ev ui.InputEvent) bool {
+					if s.recording != sc.id || ev.Kind != ui.InputKeyDown {
+						return false
+					}
+					key := ev.Key
+					if key == ui.KeyUnknown {
+						key = ev.PhysicalKey
+					}
+					switch {
+					case ev.Mods == 0 && key == ui.KeyEscape:
+						s.record("")
+					case ev.Mods == 0 && (key == ui.KeyBackspace || key == ui.KeyDelete):
+						s.setKeys(sc.id, "")
+					default:
+						keys, ok := recordKey(ev.Mods, key)
+						if !ok {
+							return true // keep waiting for a combination
+						}
+						s.setKeys(sc.id, keys)
+					}
+					s.redraw()
+					return true
+				})
+				if e.Clicked() {
+					s.record(sc.id)
+				}
+				if recording {
+					e.Focus()
+				}
+			})
+		}
+		if s.recording != "" {
+			hint := "需包含 Ctrl、Alt 或 Win；Esc 取消，Delete 清除"
+			if runtime.GOOS == "darwin" {
+				hint = "需包含 ⌃ Control、⌥ Option 或 ⌘ Command；Esc 取消，Delete 清除"
+			}
+			ui.Text(c, hint).FontSize(10).TextColor(muted)
+		}
+	})
 }
 
 // followBuiltin is the card that has the backlight follow a MacBook's own

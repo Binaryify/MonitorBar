@@ -80,6 +80,8 @@ func (a *app) ready(show bool) {
 		a.tray.Destroy()
 	})
 
+	a.s.bindShortcuts = true
+	a.s.registerShortcuts()
 	a.s.detect()
 	a.s.autoCheck()
 	go func() { // the built-in display's brightness, for following it
@@ -133,6 +135,7 @@ func (a *app) open() {
 	})
 	a.flyout.OnClosed(func() {
 		a.flyout = nil
+		a.s.record("") // a shortcut left recording keeps its keys
 		a.s.save()
 	})
 	a.pointArrow()

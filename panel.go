@@ -28,10 +28,11 @@ type panel struct {
 	// onHeight hears the panel's natural height once it changes.
 	onHeight func(h int)
 
-	height        int
-	contentHeight float32
-	settle        int  // frames still to draw while the sizes catch up
-	ownFrame      bool // this frame was asked for by settle
+	height         int
+	contentHeight  float32
+	overviewHeight float32 // every tab takes it, once measured (#9)
+	settle         int     // frames still to draw while the sizes catch up
+	ownFrame       bool    // this frame was asked for by settle
 }
 
 func (p *panel) view(c *ui.Context) {
@@ -163,15 +164,23 @@ func (p *panel) tabs(c *ui.Context) {
 			e.Children(func() { icon(c, t.icon).FontSize(16) })
 			if e.Clicked() && !selected {
 				s.prefs.Tab, s.dirty, s.notice = t.name, true, ""
+				s.record("")
 			}
 		}
 	})
 }
 
-// content scrolls the tab when it is taller than the screen allows.
+// content scrolls the tab when it is taller than the panel. Every tab is
+// as tall as the overview, so switching tabs doesn't resize the panel and
+// long ones like 画面 scroll; until the overview was shown, a tab takes its
+// own height. The screen caps both.
 func (p *panel) content(c *ui.Context) {
 	s := p.s
-	scroll := ui.Scroll(c.Key("content")).Height(min(max(p.contentHeight, 1), p.maxContent))
+	height := p.contentHeight
+	if p.overviewHeight > 0 {
+		height = p.overviewHeight
+	}
+	scroll := ui.Scroll(c.Key("content")).Height(min(max(height, 1), p.maxContent))
 	scroll.Children(func() {
 		inner := ui.Column(c).Gap(12).Padding(0, 0, 4, 0)
 		inner.Children(func() {
@@ -196,6 +205,9 @@ func (p *panel) content(c *ui.Context) {
 		if h := inner.Bounds().H; h > 0 && h != p.contentHeight {
 			p.contentHeight, p.settle = h, 3
 			c.Invalidate()
+		}
+		if s.currentTab() == tabs[0].name {
+			p.overviewHeight = p.contentHeight
 		}
 	})
 }

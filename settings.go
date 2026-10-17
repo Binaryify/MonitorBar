@@ -26,7 +26,11 @@ type settings struct {
 	FollowBuiltin bool    `json:"followBuiltin"`
 	FollowMin     float64 `json:"followMin"` // the external backlight at the built-in's darkest, %
 	FollowMax     float64 `json:"followMax"` // and at its brightest
-	path          string
+
+	// Shortcuts the user recorded, by id: absent for the default keys, ""
+	// for none.
+	Shortcuts map[string]string `json:"shortcuts,omitempty"`
+	path      string
 }
 
 // dataDir is where MonitorBar keeps its files.
