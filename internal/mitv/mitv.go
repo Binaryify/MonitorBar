@@ -115,21 +115,21 @@ func (l *Link) SetCompetitive(on bool) error {
 
 type step struct {
 	key  string
-	wait time.Duration // for the bar to follow before the next key
+	wait time.Duration // for the bar to follow: it opens in about 0.4s, keys take under 0.1s
 }
 
 // competitiveSteps opens the game bar, moves to the mode, enters it and sets
 // it: right is on and left off, whatever it was.
 func competitiveSteps(on bool) []step {
-	steps := []step{{"menu", 1500 * time.Millisecond}}
+	steps := []step{{"menu", 700 * time.Millisecond}}
 	for range 5 {
-		steps = append(steps, step{"right", 300 * time.Millisecond})
+		steps = append(steps, step{"right", 100 * time.Millisecond})
 	}
 	set := "left"
 	if on {
 		set = "right"
 	}
-	return append(steps, step{"enter", 800 * time.Millisecond}, step{set, 800 * time.Millisecond})
+	return append(steps, step{"enter", 300 * time.Millisecond}, step{set, 0})
 }
 
 func (l *Link) call(path string, query url.Values, data any) error {
