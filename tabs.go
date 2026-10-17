@@ -236,6 +236,24 @@ func (p *panel) modes(c *ui.Context) {
 	if s.hasCurrent {
 		rate = s.current.RefreshRate
 	}
+	if s.link != nil { // only the HyperOS remote can switch the monitor's own mode
+		card(c, func() {
+			trailing := ""
+			if s.switchingTo != "" {
+				trailing = "切换中…"
+			}
+			cardTitle(c, "320Hz 竞技模式", "sparkles", trailing)
+			on := s.competitive()
+			ui.Grid(c).Columns(2).Gap(6).Children(func() {
+				if chipText(c.Key("4k"), "4K 160Hz", !on) {
+					s.setCompetitive(false)
+				}
+				if chipText(c.Key("320"), "1080p 320Hz", on) {
+					s.setCompetitive(true)
+				}
+			})
+		})
+	}
 	if rates := display.RefreshRates(s.modes, s.current); len(rates) > 1 {
 		card(c, func() {
 			cardTitle(c, "刷新率", "gauge", s.current.Title())

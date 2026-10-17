@@ -95,6 +95,43 @@ func (l *Link) Press(key string) error {
 	return l.call("controller", url.Values{"action": {"keyevent"}, "keycode": {key}}, nil)
 }
 
+// SetCompetitive turns the 320Hz competitive mode of dual-mode monitors such
+// as the G Pro 27U on or off: it trades 4K 160Hz for 1080p 320Hz by changing
+// the EDID the monitor offers (#8). No API sets it, so this walks the game
+// bar the menu key opens, where the mode is the sixth item.
+func (l *Link) SetCompetitive(on bool) error {
+	for _, s := range competitiveSteps(on) {
+		if err := l.Press(s.key); err != nil {
+			return err
+		}
+		time.Sleep(s.wait)
+	}
+	// Close the bar. The monitor is busy changing its EDID by now and may
+	// not answer, which takes nothing from the switch.
+	_ = l.Press("back")
+	_ = l.Press("back")
+	return nil
+}
+
+type step struct {
+	key  string
+	wait time.Duration // for the bar to follow before the next key
+}
+
+// competitiveSteps opens the game bar, moves to the mode, enters it and sets
+// it: right is on and left off, whatever it was.
+func competitiveSteps(on bool) []step {
+	steps := []step{{"menu", 1500 * time.Millisecond}}
+	for range 5 {
+		steps = append(steps, step{"right", 300 * time.Millisecond})
+	}
+	set := "left"
+	if on {
+		set = "right"
+	}
+	return append(steps, step{"enter", 800 * time.Millisecond}, step{set, 800 * time.Millisecond})
+}
+
 func (l *Link) call(path string, query url.Values, data any) error {
 	u := url.URL{Scheme: "http", Host: fmt.Sprintf("%s:%d", l.Host, Port), Path: "/" + path, RawQuery: query.Encode()}
 	resp, err := l.client.Get(u.String())

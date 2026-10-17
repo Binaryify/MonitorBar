@@ -1,6 +1,9 @@
 package mitv
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestNamedMonitor(t *testing.T) {
 	for name, want := range map[string]bool{
@@ -30,6 +33,23 @@ func TestHasMonitorInput(t *testing.T) {
 	} {
 		if got := hasMonitorInput(c.sources); got != c.want {
 			t.Errorf("hasMonitorInput(%v) = %v, want %v", c.sources, got, c.want)
+		}
+	}
+}
+
+func TestCompetitiveSteps(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		var keys []string
+		for _, s := range competitiveSteps(on) {
+			keys = append(keys, s.key)
+		}
+		set := "left"
+		if on {
+			set = "right"
+		}
+		want := []string{"menu", "right", "right", "right", "right", "right", "enter", set}
+		if !slices.Equal(keys, want) {
+			t.Errorf("competitiveSteps(%v) = %v, want %v", on, keys, want)
 		}
 	}
 }

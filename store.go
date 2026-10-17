@@ -41,10 +41,11 @@ type store struct {
 	redraw   func()                                 // asks the open panel for a new frame
 	setGamma func(brightness, warmth float64) error // the monitor's, replaced in tests
 
-	monitor    display.Monitor
-	modes      []display.Mode
-	current    display.Mode
-	hasCurrent bool
+	monitor     display.Monitor
+	modes       []display.Mode
+	current     display.Mode
+	hasCurrent  bool
+	switchingTo string // the mode the LAN remote is switching the monitor to
 
 	link      *mitv.Link // the display's LAN remote, nil until found
 	detecting bool
@@ -676,6 +677,38 @@ func (s *store) applyMode(m display.Mode) {
 		s.notice = "已切换到 " + m.Title() + " · " + strconv.Itoa(m.RefreshRate) + " Hz"
 	}
 	s.refreshDisplay()
+}
+
+// competitive reports the monitor in its 1080p 320Hz mode: only then does
+// the system offer rates above the 160Hz of 4K.
+func (s *store) competitive() bool {
+	return slices.ContainsFunc(s.modes, func(m display.Mode) bool { return m.RefreshRate > 160 })
+}
+
+// setCompetitive switches the monitor between 4K 160Hz and 1080p 320Hz
+// through the LAN remote. The system follows once the monitor offers its
+// new EDID, some seconds later.
+func (s *store) setCompetitive(on bool) {
+	link := s.link
+	if link == nil || s.switchingTo != "" || on == s.competitive() {
+		return
+	}
+	s.switchingTo = "4K 160Hz"
+	if on {
+		s.switchingTo = "1080p 320Hz"
+	}
+	s.notice = ""
+	go func() {
+		err := link.SetCompetitive(on)
+		s.post(func() {
+			if err != nil {
+				s.notice = "切换失败：显示器没有响应"
+			} else {
+				s.notice = "显示器正在切换到 " + s.switchingTo + "，屏幕会黑几秒"
+			}
+			s.switchingTo = ""
+		})
+	}()
 }
 
 func (s *store) sleepDisplay() { _ = display.SleepNow() }
