@@ -118,6 +118,9 @@ func (p *panel) header(c *ui.Context) {
 			if s.canUpdate && m.Item("检查更新").Chosen() {
 				s.checkUpdate(true)
 			}
+			if m.Item("关于 MonitorBar").Chosen() {
+				go about() // the dialog waits for its answer: not on the main thread
+			}
 			m.Separator()
 			if m.Item("退出 MonitorBar").Chosen() {
 				mygo.App.Quit()
@@ -264,6 +267,21 @@ func (p *panel) footer(c *ui.Context) {
 			ui.Spinner(c).Size(12, 12)
 		}
 	})
+}
+
+const projectURL = "https://github.com/Binaryify/MonitorBar"
+
+// about tells the version, and offers the project's page.
+func about() {
+	r, err := mygo.Dialog.Message(mygo.MessageOptions{
+		Title:   "关于 MonitorBar",
+		Message: "MonitorBar " + mygo.App.Version(),
+		Detail:  "切换输入源、调节亮度与色温、分辨率和屏幕时间的显示器工具。\n" + projectURL,
+		Buttons: []string{"好", "项目主页"},
+	})
+	if err == nil && r.Button == 1 {
+		_ = mygo.Shell.OpenExternal(projectURL)
+	}
 }
 
 func (s *store) currentTab() string {
