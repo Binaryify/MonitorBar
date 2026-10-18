@@ -46,9 +46,18 @@ func loadIOAV() error {
 
 type ioavDDC struct{ service uintptr }
 
-// ddcTransport opens the AV service of the first external display: the app
-// manages one external monitor.
+// ddcTransport opens the monitor's DDC/CI channel: the AV service where the
+// Mac has one (Apple Silicon), else the framebuffer's own I2C bus (Intel).
 func (m Monitor) ddcTransport() (ddcTransport, error) {
+	if t, err := m.avDDCTransport(); err == nil {
+		return t, nil
+	}
+	return m.framebufferDDC()
+}
+
+// avDDCTransport opens the AV service of the first external display: the app
+// manages one external monitor.
+func (m Monitor) avDDCTransport() (ddcTransport, error) {
 	if err := loadIOAV(); err != nil {
 		return nil, err
 	}
