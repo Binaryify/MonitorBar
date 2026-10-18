@@ -11,8 +11,8 @@ import (
 	"github.com/binaryify/MonitorBar/locales"
 )
 
-// shortcut steps the brightness or the volume from anywhere (#9), with keys
-// the user can record anew.
+// shortcut steps the brightness or the volume, or switches the monitor back to
+// this Mac's input, from anywhere (#9), with keys the user can record anew.
 type shortcut struct {
 	id    string
 	title func() string
@@ -27,6 +27,7 @@ var shortcuts = []shortcut{
 	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }},
 	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
 	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
+	{"inputHome", locales.ShortcutInputHome, "Ctrl+Alt+I", func(s *store) { s.switchHome() }},
 }
 
 // keys is a shortcut's accelerator: the user's, else the default; "" when

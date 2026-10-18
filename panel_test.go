@@ -137,7 +137,8 @@ func TestNoChannelShowsNoUnsupportedText(t *testing.T) {
 				}
 			}
 		}
-		if tt.HasText("输入源") || tt.HasText("显示器音量") || tt.HasText("已通过局域网连接 · 澎湃 OS 遥控") {
+		// the input chips, not the shortcut row whose label mentions switching back
+		if tt.HasText("HDMI 1") || tt.HasText("显示器音量") || tt.HasText("已通过局域网连接 · 澎湃 OS 遥控") {
 			t.Errorf("tab %s shows controls of a missing channel: %q", tab, tt.Texts())
 		}
 	}

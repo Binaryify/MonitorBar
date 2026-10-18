@@ -91,6 +91,7 @@ type store struct {
 	brightness    float64 // hardware %, meaningful when hasBrightness
 	hasBrightness bool
 	ddcInputs     []mitv.Source
+	homeInput     int // the input this Mac is on: where the shortcut returns to
 	ddcVolume     bool
 	controls      []control
 	maxima        map[byte]int // the range of each VCP code
@@ -143,6 +144,7 @@ func newStore() *store {
 		registered:     map[string]string{},
 		soundToDisplay: display.SoundToDisplay,
 	}
+	s.homeInput = s.prefs.HomeInput
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
 	s.setGamma = func(b, w float64) error { return s.monitor.SetGamma(b, w) }
@@ -331,6 +333,9 @@ func (s *store) connect() {
 }
 
 func (s *store) selectInput(src mitv.Source) {
+	if s.homeInput == 0 && s.input != 0 {
+		s.setHomeInput(s.input)
+	}
 	s.input = src.ID
 	link := s.link
 	if link == nil {
@@ -344,6 +349,43 @@ func (s *store) selectInput(src mitv.Source) {
 			s.post(func() { s.notice = locales.NoticeInputFailed(src.Name) })
 		}
 	}()
+}
+
+// setHomeInput keeps the input this Mac is on, for this run and the next.
+func (s *store) setHomeInput(input int) {
+	s.homeInput, s.prefs.HomeInput, s.dirty = input, input, true
+}
+
+// learnHomeInput notes the input this Mac is on the first time the monitor
+// reports one the app can switch to. Later switches don't overwrite it.
+func (s *store) learnHomeInput(r ddcReading) {
+	if s.homeInput != 0 {
+		return
+	}
+	v, ok := r.values[display.VCPInput]
+	if !ok {
+		return
+	}
+	for _, src := range r.inputs {
+		if src.ID == v[0] {
+			s.setHomeInput(src.ID)
+			return
+		}
+	}
+}
+
+// switchHome puts the picture back on the input this Mac is plugged into, for
+// the shortcut: reaching for the monitor's own buttons is the slow part.
+func (s *store) switchHome() {
+	if s.homeInput == 0 {
+		return
+	}
+	for _, src := range s.sources() {
+		if src.ID == s.homeInput {
+			s.selectInput(src)
+			return
+		}
+	}
 }
 
 // stepVolume moves the volume by delta points, when it can be set.
@@ -507,6 +549,7 @@ func (s *store) applyDDC(r ddcReading) {
 		return
 	}
 	s.ddcInputs = r.inputs
+	s.learnHomeInput(r)
 	s.applyInput(r)
 	s.controls = nil
 	for _, c := range controlCatalog {

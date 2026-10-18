@@ -30,6 +30,9 @@ type settings struct {
 	// Shortcuts the user recorded, by id: absent for the default keys, ""
 	// for none.
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
+	// The input this Mac is plugged into, for the shortcut that switches back
+	// to it (0 before the monitor told).
+	HomeInput int `json:"homeInput,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
 	MediaKeys bool `json:"mediaKeys"`
 	// The language chosen in the panel, "" to follow the system's.

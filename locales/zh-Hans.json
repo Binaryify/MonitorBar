@@ -113,5 +113,6 @@
   "noticeModeSwitched": "已切换到 {mode} · {rate} Hz",
   "noticeSwitchFailed": "切换失败：显示器没有响应",
   "noticeSwitching": "显示器正在切换到 {mode}，屏幕会黑几秒",
-  "noticeLoginFailed": "登录项设置失败：{error}"
+  "noticeLoginFailed": "登录项设置失败：{error}",
+  "shortcutInputHome": "切回本机输入源"
 }

@@ -1188,3 +1188,13 @@ func NoticeLoginFailed(error string) string { return In(i18n.Locale()).NoticeLog
 func (msgs Messages) NoticeLoginFailed(error string) string {
 	return Catalog.Format(msgs.locale, "noticeLoginFailed", map[string]any{"error": error})
 }
+
+// ShortcutInputHome says "This Mac's input"
+// in the language the app shows.
+func ShortcutInputHome() string { return In(i18n.Locale()).ShortcutInputHome() }
+
+// ShortcutInputHome says "This Mac's input"
+// in the language of msgs.
+func (msgs Messages) ShortcutInputHome() string {
+	return Catalog.Format(msgs.locale, "shortcutInputHome", nil)
+}
