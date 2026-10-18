@@ -41,6 +41,9 @@ var (
 	cgSetDisplayTransferByTable        func(id, size uint32, r, g, b *float32) int32
 	cgDisplayRestoreColorSyncSettings  func()
 	cgEventSourceSecondsSinceLast      func(state int32, eventType uint32) float64
+	cgDisplayVendorNumber              func(id uint32) uint32
+	cgDisplayModelNumber               func(id uint32) uint32
+	cgDisplaySerialNumber              func(id uint32) uint32
 
 	cfArrayGetCount           func(array uintptr) int
 	cfArrayGetValueAtIndex    func(array uintptr, i int) uintptr
@@ -52,18 +55,27 @@ var (
 	cfStringGetCString        func(s uintptr, buf *byte, size int, encoding uint32) bool
 	cfGetTypeID               func(ref uintptr) uintptr
 	cfStringGetTypeID         func() uintptr
+	cfNumberGetValue          func(number uintptr, kind int32, value unsafe.Pointer) bool
 
 	ioServiceMatching               func(name string) uintptr
 	ioServiceGetMatchingServices    func(port uint32, matching uintptr, iter *uint32) int32
 	ioIteratorNext                  func(iter uint32) uint32
 	ioObjectRelease                 func(obj uint32) int32
 	ioRegistryEntryCreateCFProperty func(entry uint32, key, alloc uintptr, options uint32) uintptr
+	ioFBCopyI2CInterfaceForBus      func(fb, bus uint32, iface *uint32) int32
+	ioI2CInterfaceOpen              func(iface, options uint32, connect *uintptr) int32 // IOI2CConnectRef is a pointer
+	ioI2CInterfaceClose             func(connect uintptr, options uint32) int32
+	ioI2CSendRequest                func(connect uintptr, options uint32, request *i2cRequest) int32
+	ioDisplayCreateInfoDictionary   func(service, options uint32) uintptr
 
 	modeOptions uintptr // {kCGDisplayShowDuplicateLowResolutionModes: true}, for HiDPI modes
 	loadOnce    sync.Once
 )
 
 const utf8Encoding = 0x08000100
+
+// cfNumberSInt32Type is CFNumberGetValue's kCFNumberSInt32Type.
+const cfNumberSInt32Type = 3
 
 func load() {
 	loadOnce.Do(func() {
@@ -89,6 +101,8 @@ func load() {
 			&cgCompleteDisplayConfiguration: "CGCompleteDisplayConfiguration", &cgDisplayGammaTableCapacity: "CGDisplayGammaTableCapacity",
 			&cgGetDisplayTransferByTable: "CGGetDisplayTransferByTable", &cgSetDisplayTransferByTable: "CGSetDisplayTransferByTable",
 			&cgDisplayRestoreColorSyncSettings: "CGDisplayRestoreColorSyncSettings", &cgEventSourceSecondsSinceLast: "CGEventSourceSecondsSinceLastEventType",
+			&cgDisplayVendorNumber: "CGDisplayVendorNumber", &cgDisplayModelNumber: "CGDisplayModelNumber",
+			&cgDisplaySerialNumber: "CGDisplaySerialNumber",
 		} {
 			purego.RegisterLibFunc(fn, cg, name)
 		}
@@ -97,6 +111,7 @@ func load() {
 			&cfRetain: "CFRetain", &cfRelease: "CFRelease", &cfDictionaryCreate: "CFDictionaryCreate",
 			&cfDictionaryGetValue: "CFDictionaryGetValue", &cfStringCreateWithCString: "CFStringCreateWithCString",
 			&cfStringGetCString: "CFStringGetCString", &cfGetTypeID: "CFGetTypeID", &cfStringGetTypeID: "CFStringGetTypeID",
+			&cfNumberGetValue: "CFNumberGetValue",
 		} {
 			purego.RegisterLibFunc(fn, cf, name)
 		}
@@ -104,6 +119,9 @@ func load() {
 			&ioServiceMatching: "IOServiceMatching", &ioServiceGetMatchingServices: "IOServiceGetMatchingServices",
 			&ioIteratorNext: "IOIteratorNext", &ioObjectRelease: "IOObjectRelease",
 			&ioRegistryEntryCreateCFProperty: "IORegistryEntryCreateCFProperty",
+			&ioFBCopyI2CInterfaceForBus: "IOFBCopyI2CInterfaceForBus",
+			&ioI2CInterfaceOpen: "IOI2CInterfaceOpen", &ioI2CInterfaceClose: "IOI2CInterfaceClose",
+			&ioI2CSendRequest: "IOI2CSendRequest", &ioDisplayCreateInfoDictionary: "IODisplayCreateInfoDictionary",
 		} {
 			purego.RegisterLibFunc(fn, io, name)
 		}
