@@ -21,6 +21,7 @@ type Monitor struct {
 	// Native is the panel's own resolution where the system tells it
 	// (Windows, from the EDID), zero otherwise.
 	NativeWidth, NativeHeight int
+	Builtin                   bool // a MacBook's own display, when no external one is on
 	handle                    handle
 }
 

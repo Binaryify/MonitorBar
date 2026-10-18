@@ -85,10 +85,12 @@ func (s *store) setKeys(id, keys string) {
 
 // recordKey turns a key pressed while recording into an accelerator. It
 // needs Ctrl, Option (Alt) or Command (Win), as a lone key would be taken
-// from every app; ok is false for keys that can't make one.
+// from every app, except for a function key, which types nothing; ok is
+// false for keys that can't make one.
 func recordKey(mods ui.Modifiers, key ui.Key) (keys string, ok bool) {
 	name, named := keyNames[key]
-	if !named || mods&(ui.Ctrl|ui.Alt|ui.Super) == 0 {
+	fn := key >= ui.KeyF1 && key <= ui.KeyF12
+	if !named || mods&(ui.Ctrl|ui.Alt|ui.Super) == 0 && !fn {
 		return "", false
 	}
 	var parts []string

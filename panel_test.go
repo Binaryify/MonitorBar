@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
+	"github.com/binaryify/MonitorBar/internal/mediakeys"
 	"github.com/binaryify/MonitorBar/internal/mitv"
 	"github.com/binaryify/MonitorBar/internal/usage"
 )
@@ -32,7 +33,8 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 		link:     mitv.New("192.0.2.1"),
 		inputs:   []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 		volume:   80, hasVolume: true, deviceVolume: 80,
-		now: func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
+		soundToDisplay: func() bool { return true },
+		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
 	s.prefs.DayScene, s.prefs.NightScene = "日间", "夜间"
 	s.dayStart, s.nightStart = parseClock("07:00", 0), parseClock("19:00", 0)
@@ -420,7 +422,8 @@ func TestTabsShareTheOverviewsHeight(t *testing.T) {
 	}
 }
 
-// A shortcut records the keys pressed with Ctrl, Option or Command; Esc
+// A shortcut records the keys pressed with Ctrl, Option or Command, or a
+// lone function key; Esc
 // keeps the old ones and Delete clears them (#9).
 func TestRecordShortcut(t *testing.T) {
 	p, _ := testPanel(t)
@@ -454,8 +457,14 @@ func TestRecordShortcut(t *testing.T) {
 		t.Errorf("after Ctrl+Alt+B: keys %q, recording %q", got, s.recording)
 	}
 	record()
+	tt.Key(0, ui.KeyF2) // a function key types nothing, so it needs no modifier
+	tt.Frame()
+	if got := s.prefs.keys(shortcuts[0]); got != "F2" || s.recording != "" {
+		t.Errorf("after F2: keys %q, recording %q", got, s.recording)
+	}
+	record()
 	tt.Key(0, ui.KeyEscape)
-	if got := s.prefs.keys(shortcuts[0]); got != "Ctrl+Alt+B" || s.recording != "" {
+	if got := s.prefs.keys(shortcuts[0]); got != "F2" || s.recording != "" {
 		t.Errorf("after Esc: keys %q, recording %q", got, s.recording)
 	}
 	record()
@@ -463,6 +472,48 @@ func TestRecordShortcut(t *testing.T) {
 	tt.Frame()
 	if got := s.prefs.keys(shortcuts[0]); got != "" || !tt.HasText("未设置") {
 		t.Errorf("after Delete: keys %q in %q", got, tt.Texts())
+	}
+}
+
+// The media keys step the external display; macOS keeps the keys where the
+// display can't take them, and a MacBook's own display shares the
+// brightness keys.
+func TestMediaKey(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil // DDC/CI
+	s.hasBrightness, s.brightness = true, 50
+
+	step, pass := s.mediaKey(mediakeys.BrightnessUp)
+	if step == nil || pass {
+		t.Fatalf("brightness up: step %v, pass %v", step != nil, pass)
+	}
+	before := s.combinedBrightness()
+	step()
+	if got := s.combinedBrightness(); got != before+shortcutStep {
+		t.Errorf("brightness %v after up from %v", got, before)
+	}
+	if step, _ := s.mediaKey(mediakeys.VolumeDown); step == nil {
+		t.Fatal("volume down left to macOS with the sound on the display")
+	} else if step(); s.volume != 75 {
+		t.Errorf("volume %v after down from 80", s.volume)
+	}
+
+	s.hasBuiltin = true
+	if _, pass := s.mediaKey(mediakeys.BrightnessDown); !pass {
+		t.Error("the built-in display lost its brightness keys")
+	}
+	s.prefs.FollowBuiltin = true
+	if step, _ := s.mediaKey(mediakeys.BrightnessDown); step != nil {
+		t.Error("a key stepped the backlight that follows the built-in display")
+	}
+	s.prefs.FollowBuiltin, s.monitor.Builtin = false, true
+	if step, _ := s.mediaKey(mediakeys.BrightnessUp); step != nil {
+		t.Error("a key stepped the built-in display, with no external one")
+	}
+	s.soundToDisplay = func() bool { return false }
+	if step, _ := s.mediaKey(mediakeys.VolumeUp); step != nil {
+		t.Error("a key took the volume of sound playing elsewhere")
 	}
 }
 

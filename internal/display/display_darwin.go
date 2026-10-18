@@ -137,7 +137,7 @@ func Target() Monitor {
 			break
 		}
 	}
-	return Monitor{Name: screenName(id), Connection: connection(), handle: id}
+	return Monitor{Name: screenName(id), Connection: connection(), Builtin: cgDisplayIsBuiltin(id) != 0, handle: id}
 }
 
 // screenName asks NSScreen for the display's localized name.

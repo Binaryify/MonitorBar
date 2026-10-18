@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
+	"github.com/binaryify/MonitorBar/internal/mediakeys"
 	"github.com/binaryify/MonitorBar/internal/usage"
 )
 
@@ -164,19 +165,19 @@ func (p *panel) picture(c *ui.Context) {
 }
 
 // shortcuts lists the brightness and volume shortcuts. Clicking one records
-// keys for it: a combination with Ctrl, Option or Command sets it, Esc
-// cancels and Delete clears it.
+// keys for it: a combination with Ctrl, Option or Command, or a function
+// key, sets it, Esc cancels and Delete clears it.
 func (p *panel) shortcuts(c *ui.Context) {
 	s := p.s
 	card(c, func() {
-		cardTitle(c, "快捷键", "keyboard", "点击后按下组合键")
+		cardTitle(c, "快捷键", "keyboard", "点击后按下按键")
 		for _, sc := range shortcuts {
 			ui.Row(c.Key(sc.id)).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, sc.title).FontSize(11).Grow(1)
 				recording := s.recording == sc.id
 				label := keysLabel(s.prefs.keys(sc))
 				if recording {
-					label = "请按组合键…"
+					label = "请按按键…"
 				}
 				e := chip(c.Key(sc.id+"-keys"), recording).Width(132).Height(26).Label(sc.title + "快捷键").Focusable()
 				e.Children(func() { ui.Text(c, label).FontSize(11).FontWeight(500).SingleLine() })
@@ -212,13 +213,39 @@ func (p *panel) shortcuts(c *ui.Context) {
 			})
 		}
 		if s.recording != "" {
-			hint := "需包含 Ctrl、Alt 或 Win；Esc 取消，Delete 清除"
+			hint := "F1–F12 可单独使用，其他键需包含 Ctrl、Alt 或 Win；Esc 取消，Delete 清除"
 			if runtime.GOOS == "darwin" {
-				hint = "需包含 ⌃ Control、⌥ Option 或 ⌘ Command；Esc 取消，Delete 清除"
+				hint = "F1–F12 可单独使用（Mac 键盘需按住 fn），其他键需包含 ⌃、⌥ 或 ⌘；Esc 取消，Delete 清除"
 			}
 			ui.Text(c, hint).FontSize(10).TextColor(muted)
 		}
+		if mediakeys.Supported {
+			p.mediaKeys(c)
+		}
 	})
+}
+
+// mediaKeys is the advanced choice to take the keyboard's brightness and
+// volume keys, which needs the Accessibility permission.
+func (p *panel) mediaKeys(c *ui.Context) {
+	s := p.s
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "接管键盘亮度、音量键").FontSize(11).Grow(1)
+		on := s.prefs.MediaKeys
+		if ui.Switch(c.Key("media-keys"), &on).Label("接管键盘亮度、音量键").Changed() {
+			s.setMediaKeys(on)
+		}
+	})
+	if !s.mediaKeysDenied {
+		ui.Text(c, "高级：不按 fn 直接用 F1/F2 调外接亮度，声音走显示器时 F11/F12 调其音量；需要辅助功能权限").
+			FontSize(10).TextColor(muted)
+		return
+	}
+	ui.Text(c, "未获得辅助功能权限。请在列表中打开 MonitorBar；更新后若已打开仍无效，先用 − 移除再重新添加").
+		FontSize(10).TextColor(accent)
+	if chipText(c.Key("media-keys-settings"), "打开辅助功能设置", false) {
+		openAccessibility()
+	}
 }
 
 // followBuiltin is the card that has the backlight follow a MacBook's own

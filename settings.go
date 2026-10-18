@@ -30,6 +30,8 @@ type settings struct {
 	// Shortcuts the user recorded, by id: absent for the default keys, ""
 	// for none.
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
+	// Taking the keyboard's brightness and volume keys (macOS).
+	MediaKeys bool `json:"mediaKeys"`
 	path      string
 }
 

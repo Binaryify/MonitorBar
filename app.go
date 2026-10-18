@@ -82,11 +82,16 @@ func (a *app) ready(show bool) {
 
 	a.s.bindShortcuts = true
 	a.s.registerShortcuts()
+	a.s.syncMediaKeys()
 	a.s.detect()
 	a.s.autoCheck()
-	go func() { // the built-in display's brightness, for following it
+	go func() { // the built-in display's brightness, for following it, and the media keys' permission
 		for range time.Tick(time.Second) {
 			mygo.RunOnMain(func() {
+				denied := a.s.mediaKeysDenied
+				if a.s.syncMediaKeys(); denied != a.s.mediaKeysDenied {
+					a.s.redraw()
+				}
 				if a.s.prefs.FollowBuiltin && a.s.canFollow() {
 					a.s.followTick(display.BuiltinBrightness)
 					a.s.redraw()
