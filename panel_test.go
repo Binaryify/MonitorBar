@@ -564,3 +564,54 @@ func TestEnglish(t *testing.T) {
 		}
 	}
 }
+
+// Each input gets a shortcut, with no keys until recorded; the keys stay
+// bound while the display's inputs are unknown.
+func TestInputShortcut(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	tt := newTester(p)
+	if err := tt.Click("画面"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("切换到 HDMI2") {
+		t.Fatalf("no shortcut for HDMI2 in %q", tt.Texts())
+	}
+	if err := tt.Click("切换到 HDMI2快捷键"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Key(ui.Ctrl|ui.Alt, ui.Key2)
+	tt.Frame()
+	if got := s.prefs.Shortcuts["input-24"]; got != "Ctrl+Alt+2" {
+		t.Fatalf("HDMI2's keys %q", got)
+	}
+	var bound shortcut
+	for _, sc := range s.boundShortcuts() {
+		if sc.id == "input-24" {
+			bound = sc
+		}
+	}
+	if bound.run == nil {
+		t.Fatal("HDMI2's shortcut is not bound")
+	}
+	s.link = nil // DDC/CI lists other inputs: the shortcut does nothing
+	s.input = 0
+	bound.run(s)
+	if s.input != 0 {
+		t.Errorf("input %d after the shortcut of an input the display doesn't list", s.input)
+	}
+	s.ddcInputs = []mitv.Source{{ID: 24, Name: "HDMI2"}}
+	bound.run(s)
+	if s.input != 24 {
+		t.Errorf("input %d after HDMI2's shortcut", s.input)
+	}
+
+	s.prefs.Shortcuts = nil
+	for _, sc := range s.boundShortcuts() {
+		if strings.HasPrefix(sc.id, "input-") {
+			t.Errorf("%s is bound with no keys recorded", sc.id)
+		}
+	}
+}

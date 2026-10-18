@@ -167,14 +167,14 @@ func (p *panel) picture(c *ui.Context) {
 	p.shortcuts(c)
 }
 
-// shortcuts lists the brightness and volume shortcuts. Clicking one records
+// shortcuts lists the brightness, volume and input shortcuts. Clicking one records
 // keys for it: a combination with Ctrl, Option or Command, or a function
 // key, sets it, Esc cancels and Delete clears it.
 func (p *panel) shortcuts(c *ui.Context) {
 	s := p.s
 	card(c, func() {
 		cardTitle(c, locales.Shortcuts(), "keyboard", locales.ShortcutsNote())
-		for _, sc := range shortcuts {
+		for _, sc := range s.panelShortcuts() {
 			ui.Row(c.Key(sc.id)).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, sc.title()).FontSize(11).Grow(1)
 				recording := s.recording == sc.id

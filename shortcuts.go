@@ -1,13 +1,16 @@
 package main
 
 import (
+	"maps"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/binaryify/MonitorBar/internal/mitv"
 	"github.com/binaryify/MonitorBar/locales"
 )
 
@@ -29,6 +32,48 @@ var shortcuts = []shortcut{
 	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
 }
 
+// inputShortcut switches to an input, with no keys by default. It is kept
+// by the input's id, so its keys stay while the display is away.
+func inputShortcut(src mitv.Source) shortcut {
+	return shortcut{inputShortcutPrefix + strconv.Itoa(src.ID), func() string { return locales.ShortcutInput(src.Name) }, "",
+		func(s *store) { s.switchInput(src.ID) }}
+}
+
+const inputShortcutPrefix = "input-"
+
+// switchInput selects the input of id, when the display lists it.
+func (s *store) switchInput(id int) {
+	for _, src := range s.sources() {
+		if src.ID == id {
+			s.selectInput(src)
+			return
+		}
+	}
+}
+
+// panelShortcuts are the shortcuts the panel lists: the fixed ones, and one
+// per input the display lists.
+func (s *store) panelShortcuts() []shortcut {
+	list := slices.Clone(shortcuts)
+	for _, src := range s.sources() {
+		list = append(list, inputShortcut(src))
+	}
+	return list
+}
+
+// boundShortcuts are those to bind: the fixed ones, and the inputs' with
+// keys recorded, also before the display's inputs are known.
+func (s *store) boundShortcuts() []shortcut {
+	list := slices.Clone(shortcuts)
+	for _, id := range slices.Sorted(maps.Keys(s.prefs.Shortcuts)) {
+		n, err := strconv.Atoi(strings.TrimPrefix(id, inputShortcutPrefix))
+		if strings.HasPrefix(id, inputShortcutPrefix) && err == nil {
+			list = append(list, inputShortcut(mitv.Source{ID: n}))
+		}
+	}
+	return list
+}
+
 // keys is a shortcut's accelerator: the user's, else the default; "" when
 // the user cleared it.
 func (s *settings) keys(sc shortcut) string {
@@ -48,7 +93,7 @@ func (s *store) registerShortcuts() {
 	if s.recording != "" {
 		return
 	}
-	for _, sc := range shortcuts {
+	for _, sc := range s.boundShortcuts() {
 		keys := s.prefs.keys(sc)
 		if keys == "" {
 			continue

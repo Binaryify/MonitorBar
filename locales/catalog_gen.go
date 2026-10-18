@@ -637,6 +637,16 @@ func (msgs Messages) ShortcutVolumeDown() string {
 	return Catalog.Format(msgs.locale, "shortcutVolumeDown", nil)
 }
 
+// ShortcutInput says "Switch to {input}"
+// in the language the app shows.
+func ShortcutInput(input string) string { return In(i18n.Locale()).ShortcutInput(input) }
+
+// ShortcutInput says "Switch to {input}"
+// in the language of msgs.
+func (msgs Messages) ShortcutInput(input string) string {
+	return Catalog.Format(msgs.locale, "shortcutInput", map[string]any{"input": input})
+}
+
 // ShortcutKeys says "{action} shortcut"
 // in the language the app shows.
 func ShortcutKeys(action string) string { return In(i18n.Locale()).ShortcutKeys(action) }

@@ -60,6 +60,7 @@
   "shortcutBrightnessDown": "亮度 −",
   "shortcutVolumeUp": "音量 +",
   "shortcutVolumeDown": "音量 −",
+  "shortcutInput": "切换到 {input}",
   "shortcutKeys": "{action}快捷键",
   "shortcutRecording": "请按按键…",
   "shortcutNone": "未设置",

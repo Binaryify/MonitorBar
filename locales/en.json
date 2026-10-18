@@ -87,6 +87,14 @@
   "shortcutBrightnessDown": "Brightness −",
   "shortcutVolumeUp": "Volume +",
   "shortcutVolumeDown": "Volume −",
+  "shortcutInput": "Switch to {input}",
+  "@shortcutInput": {
+    "placeholders": {
+      "input": {
+        "type": "String"
+      }
+    }
+  },
   "shortcutKeys": "{action} shortcut",
   "@shortcutKeys": {
     "placeholders": {
