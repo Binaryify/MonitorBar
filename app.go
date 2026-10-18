@@ -10,6 +10,7 @@ import (
 
 	"github.com/binaryify/MonitorBar/internal/display"
 	"github.com/binaryify/MonitorBar/internal/usage"
+	"github.com/binaryify/MonitorBar/locales"
 )
 
 // chrome is the panel's height besides the scrolling content: arrow,
@@ -38,18 +39,22 @@ func (a *app) ready(show bool) {
 	if err != nil {
 		log.Fatal("tray: ", err)
 	}
-	menu := mygo.NewMenu([]*mygo.MenuItem{
-		{Label: "打开 MonitorBar", Click: func(*mygo.MenuItem, *mygo.Window) { a.open() }},
-		mygo.Separator(),
-		{Label: "退出 MonitorBar", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	})
+	// The menu is made anew in the language of the moment.
+	menu := func() *mygo.Menu {
+		return mygo.NewMenu([]*mygo.MenuItem{
+			{Label: locales.TrayOpen(), Click: func(*mygo.MenuItem, *mygo.Window) { a.open() }},
+			mygo.Separator(),
+			{Label: locales.MenuQuit(), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+		})
+	}
 	if runtime.GOOS == "linux" { // AppIndicator reports no clicks
-		a.tray.SetMenu(menu)
+		a.tray.SetMenu(menu())
+		mygo.App.OnLocaleChanged(func(string) { a.tray.SetMenu(menu()) })
 	} else {
 		a.tray.OnClick(a.toggle)
 		a.tray.OnRightClick(func() {
 			a.close()
-			a.tray.SetMenu(menu) // for this popup only, so clicks keep toggling the panel
+			a.tray.SetMenu(menu()) // for this popup only, so clicks keep toggling the panel
 			defer a.tray.SetMenu(nil)
 			a.tray.PopUpMenu()
 		})

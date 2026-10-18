@@ -1,0 +1,294 @@
+{
+  "@@locale": "en",
+  "trayOpen": "Open MonitorBar",
+  "menuMore": "More",
+  "menuDetect": "Detect Displays Again",
+  "menuDisplaySettings": "Open Display Settings…",
+  "menuLaunchAtLogin": "Launch at Login",
+  "menuCheckUpdates": "Check for Updates",
+  "menuLanguage": "Language",
+  "menuLanguageSystem": "System Default",
+  "menuAbout": "About MonitorBar",
+  "menuQuit": "Quit MonitorBar",
+  "sleepDisplay": "Turn Off Display",
+  "monitorUnnamed": "Display",
+  "captionExternal": "External display",
+  "aboutDetail": "Switch inputs, set the brightness and color temperature, the resolution, and see your screen time.",
+  "aboutOK": "OK",
+  "aboutHomepage": "Project Page",
+  "tabOverview": "Overview",
+  "tabPicture": "Picture",
+  "tabModes": "Resolution",
+  "tabActivity": "Screen Time",
+  "updateAvailable": "New version {version}",
+  "@updateAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateProgress": "Updating {percent}%",
+  "@updateProgress": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "updateInstall": "Update and Restart",
+  "footerLanAndDdc": "Connected · LAN + DDC/CI",
+  "footerLan": "Connected over LAN · HyperOS remote",
+  "footerDdc": "Connected over DDC/CI",
+  "footerDetecting": "Detecting the display…",
+  "inputs": "Input",
+  "inputsOverLan": "LAN",
+  "brightness": "Brightness",
+  "brightnessCombined": "Combined · backlight + software dimming",
+  "brightnessMinimumSoftware": "Lowest backlight · software dimming",
+  "brightnessMinimum": "Lowest backlight",
+  "brightnessFollowing": "Combined · following the built-in display",
+  "brightnessSoftware": "Software dimming · gamma",
+  "currentMode": "CURRENT MODE",
+  "modeHiDPI": "HiDPI · rendered at {width, number, ::group-off}×{height, number, ::group-off} · {rate} Hz",
+  "@modeHiDPI": {
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "volume": "Display Volume",
+  "scenes": "Scenes",
+  "scenesNote": "Brightness + color temperature",
+  "sceneDay": "Day",
+  "sceneReading": "Reading",
+  "sceneMovie": "Movie",
+  "sceneNight": "Night",
+  "warmth": "Color Temperature",
+  "warmthNote": "Warmer to the right, with less blue light",
+  "warmthNeutral": "Neutral",
+  "controlContrast": "Contrast",
+  "controlSharpness": "Sharpness",
+  "controlRedGain": "Red Gain",
+  "controlGreenGain": "Green Gain",
+  "controlBlueGain": "Blue Gain",
+  "controlNote": "Hardware · DDC/CI",
+  "resetSoftware": "Reset Software Adjustments",
+  "shortcuts": "Shortcuts",
+  "shortcutsNote": "Click, then press keys",
+  "shortcutBrightnessUp": "Brightness +",
+  "shortcutBrightnessDown": "Brightness −",
+  "shortcutVolumeUp": "Volume +",
+  "shortcutVolumeDown": "Volume −",
+  "shortcutKeys": "{action} shortcut",
+  "@shortcutKeys": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutRecording": "Press keys…",
+  "shortcutNone": "None",
+  "shortcutHint": "F1–F12 work alone; other keys need Ctrl, Alt or Win. Esc cancels, Delete clears.",
+  "shortcutHintMac": "F1–F12 work alone (with fn on a Mac keyboard); other keys need ⌃, ⌥ or ⌘. Esc cancels, Delete clears.",
+  "shortcutFailed": "Couldn't set the shortcut {keys}: another app may use it",
+  "@shortcutFailed": {
+    "placeholders": {
+      "keys": {
+        "type": "String"
+      }
+    }
+  },
+  "mediaKeys": "Use the keyboard's brightness and volume keys",
+  "mediaKeysNote": "Advanced: F1/F2 without fn set the external brightness, and F11/F12 its volume while the sound plays on it. Needs the Accessibility permission.",
+  "mediaKeysDenied": "No Accessibility permission. Turn MonitorBar on in the list; if it's on and still doesn't work after an update, remove it with − and add it again.",
+  "mediaKeysSettings": "Open Accessibility Settings",
+  "follow": "Follow the Built-in Display",
+  "followSwitch": "Follow the built-in display",
+  "followNote": "With automatic brightness on the built-in display, the external backlight follows it",
+  "followRange": "External brightness range",
+  "followStatus": "Built-in {builtin}% → external {external}%",
+  "@followStatus": {
+    "placeholders": {
+      "builtin": {
+        "type": "int"
+      },
+      "external": {
+        "type": "int"
+      }
+    }
+  },
+  "auto": "Auto Switch",
+  "autoSwitch": "Switch automatically",
+  "autoNote": "Switches between the day and night scenes by the time",
+  "autoDay": "Day",
+  "autoNight": "Night",
+  "autoStart": "{period} starts",
+  "@autoStart": {
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "autoScene": "{period} scene",
+  "@autoScene": {
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "autoNowDay": "It's day; switches to “{scene}” at {time, time, short}",
+  "@autoNowDay": {
+    "placeholders": {
+      "time": {
+        "type": "DateTime"
+      },
+      "scene": {
+        "type": "String"
+      }
+    }
+  },
+  "autoNowNight": "It's night; switches to “{scene}” at {time, time, short}",
+  "@autoNowNight": {
+    "placeholders": {
+      "time": {
+        "type": "DateTime"
+      },
+      "scene": {
+        "type": "String"
+      }
+    }
+  },
+  "competitive": "320Hz Competitive Mode",
+  "competitiveSwitching": "Switching…",
+  "refreshRate": "Refresh Rate",
+  "modesHiDPI": "HiDPI (sharp)",
+  "modesStandard": "Standard",
+  "modesCount": "{count, plural, one {# mode} other {# modes}}",
+  "@modesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modeRendered": "Rendered at {width, number, ::group-off}×{height, number, ::group-off}",
+  "@modeRendered": {
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
+    }
+  },
+  "activityAwakeToday": "Screen on today",
+  "activityActiveToday": "Used today",
+  "activityWeek": "Last 7 days",
+  "activityAverage": "{duration} a day",
+  "@activityAverage": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "activityAwake": "Screen on",
+  "activityActive": "Keyboard or mouse in use",
+  "activityNote": "Screen on: how long the display was lit. Used: how long the keyboard or mouse was used within two minutes. MonitorBar records only while it runs.",
+  "activityDay": "{day}  screen on {awake} · used {active}",
+  "@activityDay": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "awake": {
+        "type": "String"
+      },
+      "active": {
+        "type": "String"
+      }
+    }
+  },
+  "durationMinutes": "{minutes} min",
+  "@durationMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHours": "{hours} h {minutes} min",
+  "@durationHours": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "today": "Today",
+  "noticeGammaLimited": "Windows limits software dimming: it's at the darkest Windows allows.",
+  "noticeGammaFailed": "Dimming failed: the system refused the setting.",
+  "noticeInputFailed": "Couldn't switch to {input}: the display didn't respond",
+  "@noticeInputFailed": {
+    "placeholders": {
+      "input": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeVolumeFailed": "Couldn't set the volume: the display didn't respond",
+  "noticeUpdateCheckFailed": "Couldn't check for updates: no network, or GitHub can't be reached",
+  "noticeUpToDate": "MonitorBar {version} is the latest version",
+  "@noticeUpToDate": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeUpdateFailed": "The update failed. Try again later, or download it from GitHub",
+  "noticeModeRejected": "Couldn't switch: the display refused the mode",
+  "noticeModeSwitched": "Switched to {mode} · {rate} Hz",
+  "@noticeModeSwitched": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "noticeSwitchFailed": "Couldn't switch: the display didn't respond",
+  "noticeSwitching": "The display is switching to {mode}; the screen goes dark for a few seconds",
+  "@noticeSwitching": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeLoginFailed": "Couldn't set the login item: {error}",
+  "@noticeLoginFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}

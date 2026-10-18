@@ -1,20 +1,31 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
+	"github.com/binaryify/MonitorBar/locales"
 )
 
-type tab struct{ name, icon string }
+// tab is a page of the panel: id is kept in the settings, label shown.
+type tab struct {
+	id    string
+	label func() string
+	icon  string
+}
 
-var tabs = []tab{{"概览", "display"}, {"画面", "sliders"}, {"分辨率", "aspect"}, {"屏幕时间", "chart"}}
+var tabs = []tab{
+	{"overview", locales.TabOverview, "display"},
+	{"picture", locales.TabPicture, "sliders"},
+	{"modes", locales.TabModes, "aspect"},
+	{"activity", locales.TabActivity, "chart"},
+}
 
 const arrowHeight = 10
 
@@ -100,33 +111,44 @@ func (p *panel) header(c *ui.Context) {
 			icon(c, "display").FontSize(15).TextColor(ui.RGB(255, 255, 255))
 		})
 		ui.Column(c).Gap(3).Grow(1).Children(func() {
-			ui.Text(c, s.monitor.Name).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
+			ui.Text(c, or(s.monitor.Name, locales.MonitorUnnamed())).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
 			ui.Text(c, p.caption()).FontSize(10).FontWeight(500).TextColor(muted)
 		})
-		ui.Box(c).Size(24, 30).Center().TextColor(muted).Label("更多").Cursor(ui.CursorPointer).Children(func() {
+		ui.Box(c).Size(24, 30).Center().TextColor(muted).Label(locales.MenuMore()).Cursor(ui.CursorPointer).Children(func() {
 			icon(c, "ellipsis").FontSize(16)
 		}).Menu(func(m *ui.Menu) {
-			if m.Item("重新检测显示器").Chosen() {
+			if m.Item(locales.MenuDetect()).Chosen() {
 				s.detect()
 			}
-			if m.Item("打开系统显示器设置…").Chosen() {
+			if m.Item(locales.MenuDisplaySettings()).Chosen() {
 				_ = mygo.Shell.OpenExternal(display.SettingsURL)
 			}
-			if m.Item("登录时启动").Checked(s.launchAtLogin).Chosen() {
+			if m.Item(locales.MenuLaunchAtLogin()).Checked(s.launchAtLogin).Chosen() {
 				s.toggleLaunchAtLogin()
 			}
-			if s.canUpdate && m.Item("检查更新").Chosen() {
+			if s.canUpdate && m.Item(locales.MenuCheckUpdates()).Chosen() {
 				s.checkUpdate(true)
 			}
-			if m.Item("关于 MonitorBar").Chosen() {
+			m.Submenu(locales.MenuLanguage(), func(m *ui.Menu) {
+				if m.Item(locales.MenuLanguageSystem()).Checked(s.prefs.Language == "").Chosen() {
+					s.setLanguage("")
+				}
+				m.Separator()
+				for _, tag := range mygo.App.Languages() {
+					if m.Item(i18n.Autonym(tag)).Checked(s.prefs.Language == tag).Chosen() {
+						s.setLanguage(tag)
+					}
+				}
+			})
+			if m.Item(locales.MenuAbout()).Chosen() {
 				go about() // the dialog waits for its answer: not on the main thread
 			}
 			m.Separator()
-			if m.Item("退出 MonitorBar").Chosen() {
+			if m.Item(locales.MenuQuit()).Chosen() {
 				mygo.App.Quit()
 			}
 		})
-		power := ui.Box(c).Size(32, 32).Radius(16).Center().Cursor(ui.CursorPointer).Tooltip("立即熄屏").Label("立即熄屏")
+		power := ui.Box(c).Size(32, 32).Radius(16).Center().Cursor(ui.CursorPointer).Tooltip(locales.SleepDisplay()).Label(locales.SleepDisplay())
 		power.Background(ui.RGBA(255, 255, 255, 0.07))
 		if power.Hovered() {
 			power.Background(ui.RGBA(255, 255, 255, 0.12))
@@ -138,9 +160,9 @@ func (p *panel) header(c *ui.Context) {
 	})
 }
 
-// caption sums the monitor up: "外接显示器 · HDMI · 4K · 160Hz".
+// caption sums the monitor up: "External display · HDMI · 4K · 160Hz".
 func (p *panel) caption() string {
-	parts := []string{"外接显示器"}
+	parts := []string{locales.CaptionExternal()}
 	if p.s.monitor.Connection != "" {
 		parts = append(parts, p.s.monitor.Connection)
 	}
@@ -157,8 +179,8 @@ func (p *panel) tabs(c *ui.Context) {
 	s := p.s
 	ui.Row(c).Gap(4).Padding(4).Margin(0, 0, 12, 0).Radius(12).Background(ui.RGBA(255, 255, 255, 0.066)).Border(0.7, cardStroke).Children(func() {
 		for _, t := range tabs {
-			selected := s.currentTab() == t.name
-			e := ui.Box(c.Key(t.name)).Grow(1).Height(34).Radius(9).Center().Tooltip(t.name).Label(t.name).Cursor(ui.CursorPointer)
+			selected := s.currentTab().id == t.id
+			e := ui.Box(c.Key(t.id)).Grow(1).Height(34).Radius(9).Center().Tooltip(t.label()).Label(t.label()).Cursor(ui.CursorPointer)
 			if selected {
 				e.Background(accent.Alpha(0.2)).TextColor(accent)
 			} else {
@@ -166,7 +188,7 @@ func (p *panel) tabs(c *ui.Context) {
 			}
 			e.Children(func() { icon(c, t.icon).FontSize(16) })
 			if e.Clicked() && !selected {
-				s.prefs.Tab, s.dirty, s.notice = t.name, true, ""
+				s.prefs.Tab, s.dirty, s.notice = t.id, true, ""
 				s.record("")
 			}
 		}
@@ -187,16 +209,16 @@ func (p *panel) content(c *ui.Context) {
 	scroll.Children(func() {
 		inner := ui.Column(c).Gap(12).Padding(0, 0, 4, 0)
 		inner.Children(func() {
-			name := s.currentTab()
-			if name != tabs[0].name {
-				sectionTitle(c, name)
+			t := s.currentTab()
+			if t.id != tabs[0].id {
+				sectionTitle(c, t.label())
 			}
-			switch name {
-			case "画面":
+			switch t.id {
+			case "picture":
 				p.picture(c)
-			case "分辨率":
+			case "modes":
 				p.modes(c)
-			case "屏幕时间":
+			case "activity":
 				p.activity(c)
 			default:
 				p.overview(c)
@@ -209,7 +231,7 @@ func (p *panel) content(c *ui.Context) {
 			p.contentHeight, p.settle = h, 3
 			c.Invalidate()
 		}
-		if s.currentTab() == tabs[0].name {
+		if s.currentTab().id == tabs[0].id {
 			p.overviewHeight = p.contentHeight
 		}
 	})
@@ -224,13 +246,13 @@ func (p *panel) updateBar(c *ui.Context) {
 	ui.Row(c).Gap(8).Padding(10, 12).Margin(12, 0, 0, 0).Radius(10).Background(accent.Alpha(0.12)).
 		Border(0.7, accent.Alpha(0.35)).AlignItems(ui.Center).Children(func() {
 		icon(c, "sparkles").FontSize(13).TextColor(accent)
-		ui.Text(c, "新版本 "+s.update.Version).FontSize(11).FontWeight(600).Grow(1)
+		ui.Text(c, locales.UpdateAvailable(s.update.Version)).FontSize(11).FontWeight(600).Grow(1)
 		if s.installing {
-			ui.Text(c, fmt.Sprintf("正在更新 %d%%", s.progress)).FontSize(11).TextColor(muted)
+			ui.Text(c, locales.UpdateProgress(s.progress)).FontSize(11).TextColor(muted)
 			return
 		}
 		b := chip(c, true).Padding(4, 12)
-		b.Children(func() { ui.Text(c, "更新并重启").FontSize(11).FontWeight(500) })
+		b.Children(func() { ui.Text(c, locales.UpdateInstall()).FontSize(11).FontWeight(500) })
 		if b.Clicked() {
 			s.installUpdate()
 		}
@@ -244,13 +266,13 @@ func (p *panel) footer(c *ui.Context) {
 	text := ""
 	switch {
 	case s.link != nil && s.ddc != nil:
-		text = "已连接 · 局域网 + DDC/CI"
+		text = locales.FooterLanAndDdc()
 	case s.link != nil:
-		text = "已通过局域网连接 · 澎湃 OS 遥控"
+		text = locales.FooterLan()
 	case s.ddc != nil:
-		text = "已通过 DDC/CI 连接"
+		text = locales.FooterDdc()
 	case s.detectingAny():
-		text = "正在检测显示器…"
+		text = locales.FooterDetecting()
 	}
 	if text == "" {
 		ui.Box(c).Height(12)
@@ -274,21 +296,28 @@ const projectURL = "https://github.com/Binaryify/MonitorBar"
 // about tells the version, and offers the project's page.
 func about() {
 	r, err := mygo.Dialog.Message(mygo.MessageOptions{
-		Title:   "关于 MonitorBar",
+		Title:   locales.MenuAbout(),
 		Message: "MonitorBar " + mygo.App.Version(),
-		Detail:  "切换输入源、调节亮度与色温、分辨率和屏幕时间的显示器工具。\n" + projectURL,
-		Buttons: []string{"好", "项目主页"},
+		Detail:  locales.AboutDetail() + "\n" + projectURL,
+		Buttons: []string{locales.AboutOK(), locales.AboutHomepage()},
 	})
 	if err == nil && r.Button == 1 {
 		_ = mygo.Shell.OpenExternal(projectURL)
 	}
 }
 
-func (s *store) currentTab() string {
+func (s *store) currentTab() tab {
 	for _, t := range tabs {
-		if t.name == s.prefs.Tab {
-			return t.name
+		if t.id == s.prefs.Tab {
+			return t
 		}
 	}
-	return tabs[0].name
+	return tabs[0]
+}
+
+// setLanguage shows the panel in tag, "" for the system's language. MyGo
+// keeps it for the next launches; the settings keep it for the menu's mark.
+func (s *store) setLanguage(tag string) {
+	s.prefs.Language, s.dirty = tag, true
+	mygo.App.SetLocale(tag)
 }

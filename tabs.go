@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"slices"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
 	"github.com/binaryify/MonitorBar/internal/mediakeys"
 	"github.com/binaryify/MonitorBar/internal/usage"
+	"github.com/binaryify/MonitorBar/locales"
 )
 
 // MARK: 概览
@@ -20,7 +23,7 @@ func (p *panel) overview(c *ui.Context) {
 	p.hero(c)
 	if sources := s.sources(); len(sources) > 0 {
 		card(c, func() {
-			cardTitle(c, "输入源", "plug", s.inputChannel())
+			cardTitle(c, locales.Inputs(), "plug", s.inputChannel())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, src := range sources {
 					if chipText(c.Key(src.ID), src.Name, s.input == src.ID) {
@@ -32,20 +35,20 @@ func (p *panel) overview(c *ui.Context) {
 	}
 	if s.hasBrightness {
 		combined := s.combinedBrightness()
-		caption := "组合 · 硬件背光 + 软件调光"
+		caption := locales.BrightnessCombined()
 		switch {
 		case combined < switchover-0.5:
-			caption = "最小硬件值 · 软件调光"
+			caption = locales.BrightnessMinimumSoftware()
 		case combined <= switchover+0.5:
-			caption = "最小硬件值"
+			caption = locales.BrightnessMinimum()
 		case s.prefs.FollowBuiltin && s.canFollow():
-			caption = "组合 · 跟随内屏"
+			caption = locales.BrightnessFollowing()
 		}
-		if (sliderCard{key: "backlight", title: "亮度", caption: caption, icon: "sun",
+		if (sliderCard{key: "backlight", title: locales.Brightness(), caption: caption, icon: "sun",
 			value: &combined, lo: 0, hi: 100, step: 5}).show(c) {
 			s.setCombined(combined)
 		}
-	} else if (sliderCard{key: "brightness", title: "亮度", caption: "软件调光 · Gamma", icon: "sun",
+	} else if (sliderCard{key: "brightness", title: locales.Brightness(), caption: locales.BrightnessSoftware(), icon: "sun",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
 		s.applyGamma()
 	}
@@ -64,7 +67,7 @@ func (p *panel) hero(c *ui.Context) {
 		m := s.current
 		title, caption = m.Title(), fmt.Sprintf("%d Hz", m.RefreshRate)
 		if m.HiDPI() {
-			caption = fmt.Sprintf("HiDPI · 渲染 %d×%d · %d Hz", m.PixelWidth, m.PixelHeight, m.RefreshRate)
+			caption = locales.ModeHiDPI(m.PixelWidth, m.PixelHeight, m.RefreshRate)
 		}
 	}
 	ui.Column(c).Children(func() {
@@ -85,7 +88,7 @@ func (p *panel) hero(c *ui.Context) {
 		})
 		ui.Row(c).Gap(5).Padding(8, 6, 0, 6).Children(func() {
 			ui.Box(c).Size(4, 4).Radius(2).Background(accent)
-			ui.Text(c, "当前画面").FontSize(9).Bold().LetterSpacing(1.1).TextColor(muted).Grow(1)
+			ui.Text(c, locales.CurrentMode()).FontSize(9).Bold().LetterSpacing(1.1).TextColor(muted).Grow(1)
 			if s.monitor.Connection != "" {
 				ui.Text(c, s.monitor.Connection).FontSize(9).FontWeight(600).TextColor(accent)
 			}
@@ -98,10 +101,10 @@ func (p *panel) volume(c *ui.Context) {
 	card(c, func() {
 		ui.Row(c).Gap(8).Children(func() {
 			icon(c, "volume").FontSize(14).TextColor(muted).Width(18)
-			ui.Text(c, "显示器音量").FontSize(12).FontWeight(600).Grow(1)
+			ui.Text(c, locales.Volume()).FontSize(12).FontWeight(600).Grow(1)
 			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
-		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label("显示器音量").Changed() {
+		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label(locales.Volume()).Changed() {
 			s.setVolume(s.volume)
 		}
 	})
@@ -110,13 +113,13 @@ func (p *panel) volume(c *ui.Context) {
 func (p *panel) scenes(c *ui.Context) {
 	s := p.s
 	card(c, func() {
-		cardTitle(c, "场景", "sparkles", "亮度 + 色温")
+		cardTitle(c, locales.Scenes(), "sparkles", locales.ScenesNote())
 		ui.Row(c).Gap(6).Children(func() {
 			for _, sc := range scenes {
-				e := chip(c.Key(sc.name), s.isActive(sc)).Grow(1).Height(50).Gap(5)
+				e := chip(c.Key(sc.id), s.isActive(sc)).Grow(1).Height(50).Gap(5)
 				e.Children(func() {
 					icon(c, sc.icon).FontSize(14)
-					ui.Text(c, sc.name).FontSize(10).FontWeight(500)
+					ui.Text(c, sc.label()).FontSize(10).FontWeight(500)
 				})
 				if e.Clicked() {
 					s.apply(sc)
@@ -135,10 +138,10 @@ func (p *panel) picture(c *ui.Context) {
 		p.followBuiltin(c)
 	}
 	p.autoSwitch(c)
-	if (sliderCard{key: "warmth", title: "色温", caption: "向右更暖，减少蓝光", icon: "thermometer",
+	if (sliderCard{key: "warmth", title: locales.Warmth(), caption: locales.WarmthNote(), icon: "thermometer",
 		value: &s.prefs.Warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
 			if v < 1 {
-				return "标准"
+				return locales.WarmthNeutral()
 			}
 			return fmt.Sprint(int(math.Round(v)))
 		}}).show(c) {
@@ -146,7 +149,7 @@ func (p *panel) picture(c *ui.Context) {
 	}
 	for i := range s.controls { // only what the monitor answers over DDC/CI
 		ctl := &s.controls[i]
-		if (sliderCard{key: "ddc-" + ctl.name, title: ctl.name, caption: "硬件 · DDC/CI", icon: "sliders",
+		if (sliderCard{key: fmt.Sprintf("ddc-%02x", ctl.code), title: ctl.label(), caption: locales.ControlNote(), icon: "sliders",
 			value: &ctl.value, lo: 0, hi: float64(ctl.max), step: 1}).show(c) {
 			s.setControl(i)
 		}
@@ -155,7 +158,7 @@ func (p *panel) picture(c *ui.Context) {
 	reset.Children(func() {
 		ui.Row(c).Gap(6).Children(func() {
 			icon(c, "rotate").FontSize(11)
-			ui.Text(c, "恢复软件调整").FontSize(11).FontWeight(500)
+			ui.Text(c, locales.ResetSoftware()).FontSize(11).FontWeight(500)
 		})
 	})
 	if reset.Clicked() {
@@ -170,16 +173,16 @@ func (p *panel) picture(c *ui.Context) {
 func (p *panel) shortcuts(c *ui.Context) {
 	s := p.s
 	card(c, func() {
-		cardTitle(c, "快捷键", "keyboard", "点击后按下按键")
+		cardTitle(c, locales.Shortcuts(), "keyboard", locales.ShortcutsNote())
 		for _, sc := range shortcuts {
 			ui.Row(c.Key(sc.id)).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, sc.title).FontSize(11).Grow(1)
+				ui.Text(c, sc.title()).FontSize(11).Grow(1)
 				recording := s.recording == sc.id
 				label := keysLabel(s.prefs.keys(sc))
 				if recording {
-					label = "请按按键…"
+					label = locales.ShortcutRecording()
 				}
-				e := chip(c.Key(sc.id+"-keys"), recording).Width(132).Height(26).Label(sc.title + "快捷键").Focusable()
+				e := chip(c.Key(sc.id+"-keys"), recording).Width(132).Height(26).Label(locales.ShortcutKeys(sc.title())).Focusable()
 				e.Children(func() { ui.Text(c, label).FontSize(11).FontWeight(500).SingleLine() })
 				e.HandleInput(func(ev ui.InputEvent) bool {
 					if s.recording != sc.id || ev.Kind != ui.InputKeyDown {
@@ -213,9 +216,9 @@ func (p *panel) shortcuts(c *ui.Context) {
 			})
 		}
 		if s.recording != "" {
-			hint := "F1–F12 可单独使用，其他键需包含 Ctrl、Alt 或 Win；Esc 取消，Delete 清除"
+			hint := locales.ShortcutHint()
 			if runtime.GOOS == "darwin" {
-				hint = "F1–F12 可单独使用（Mac 键盘需按住 fn），其他键需包含 ⌃、⌥ 或 ⌘；Esc 取消，Delete 清除"
+				hint = locales.ShortcutHintMac()
 			}
 			ui.Text(c, hint).FontSize(10).TextColor(muted)
 		}
@@ -230,20 +233,20 @@ func (p *panel) shortcuts(c *ui.Context) {
 func (p *panel) mediaKeys(c *ui.Context) {
 	s := p.s
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "接管键盘亮度、音量键").FontSize(11).Grow(1)
+		ui.Text(c, locales.MediaKeys()).FontSize(11).Grow(1)
 		on := s.prefs.MediaKeys
-		if ui.Switch(c.Key("media-keys"), &on).Label("接管键盘亮度、音量键").Changed() {
+		if ui.Switch(c.Key("media-keys"), &on).Label(locales.MediaKeys()).Changed() {
 			s.setMediaKeys(on)
 		}
 	})
 	if !s.mediaKeysDenied {
-		ui.Text(c, "高级：不按 fn 直接用 F1/F2 调外接亮度，声音走显示器时 F11/F12 调其音量；需要辅助功能权限").
+		ui.Text(c, locales.MediaKeysNote()).
 			FontSize(10).TextColor(muted)
 		return
 	}
-	ui.Text(c, "未获得辅助功能权限。请在列表中打开 MonitorBar；更新后若已打开仍无效，先用 − 移除再重新添加").
+	ui.Text(c, locales.MediaKeysDenied()).
 		FontSize(10).TextColor(accent)
-	if chipText(c.Key("media-keys-settings"), "打开辅助功能设置", false) {
+	if chipText(c.Key("media-keys-settings"), locales.MediaKeysSettings(), false) {
 		openAccessibility()
 	}
 }
@@ -255,25 +258,25 @@ func (p *panel) followBuiltin(c *ui.Context) {
 	card(c, func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			icon(c, "sun").FontSize(13)
-			ui.Text(c, "跟随内屏亮度").FontSize(12).FontWeight(600).Grow(1)
-			if ui.Switch(c.Key("follow"), &s.prefs.FollowBuiltin).Label("启用跟随内屏亮度").Changed() {
+			ui.Text(c, locales.Follow()).FontSize(12).FontWeight(600).Grow(1)
+			if ui.Switch(c.Key("follow"), &s.prefs.FollowBuiltin).Label(locales.FollowSwitch()).Changed() {
 				s.followChanged()
 			}
 		})
 		if !s.prefs.FollowBuiltin {
-			ui.Text(c, "内屏开启自动亮度时，外接显示器的背光随之调节").FontSize(10).TextColor(muted)
+			ui.Text(c, locales.FollowNote()).FontSize(10).TextColor(muted)
 			return
 		}
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "外接亮度范围").FontSize(11)
+			ui.Text(c, locales.FollowRange()).FontSize(11)
 			ui.Spacer(c)
 			ui.Textf(c, "%d – %d", int(s.prefs.FollowMin), int(s.prefs.FollowMax)).FontSize(11).FontFeatures("tnum")
 		})
-		if ui.RangeSlider(c.Key("follow-range"), &s.prefs.FollowMin, &s.prefs.FollowMax, 0, 100, 1).Label("外接亮度范围").Changed() {
+		if ui.RangeSlider(c.Key("follow-range"), &s.prefs.FollowMin, &s.prefs.FollowMax, 0, 100, 1).Label(locales.FollowRange()).Changed() {
 			s.followChanged()
 		}
 		if s.lastBuiltin >= 0 {
-			ui.Textf(c, "内屏 %d%% → 外接 %d%%", int(math.Round(s.lastBuiltin*100)), int(math.Round(s.followTarget))).
+			ui.Text(c, locales.FollowStatus(int(math.Round(s.lastBuiltin*100)), int(math.Round(s.followTarget)))).
 				FontSize(10).TextColor(muted)
 		}
 	})
@@ -283,36 +286,39 @@ func (p *panel) followBuiltin(c *ui.Context) {
 // times.
 func (p *panel) autoSwitch(c *ui.Context) {
 	s := p.s
-	names := make([]string, len(scenes))
+	labels := make([]string, len(scenes))
 	for i, sc := range scenes {
-		names[i] = sc.name
+		labels[i] = sc.label()
 	}
 	card(c, func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			icon(c, "clock").FontSize(13)
-			ui.Text(c, "自动切换").FontSize(12).FontWeight(600).Grow(1)
-			if ui.Switch(c.Key("auto"), &s.prefs.AutoSwitch).Label("启用自动切换").Changed() {
+			ui.Text(c, locales.Auto()).FontSize(12).FontWeight(600).Grow(1)
+			if ui.Switch(c.Key("auto"), &s.prefs.AutoSwitch).Label(locales.AutoSwitch()).Changed() {
 				s.autoChanged()
 			}
 		})
 		if !s.prefs.AutoSwitch {
-			ui.Text(c, "按时间在白天和夜晚的场景之间切换").FontSize(10).TextColor(muted)
+			ui.Text(c, locales.AutoNote()).FontSize(10).TextColor(muted)
 			return
 		}
 		row := func(key, label string, at *time.Time, scene *string) {
 			ui.Row(c.Key(key)).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, label).FontSize(11).Width(56)
-				if ui.TimeInput(c.Key(key+"-time"), at).Label(label + "开始").Changed() {
+				if ui.TimeInput(c.Key(key+"-time"), at).Label(locales.AutoStart(label)).Changed() {
 					s.autoChanged()
 				}
 				ui.Spacer(c)
-				if ui.Select(c.Key(key+"-scene"), scene, names).Label(label + "场景").Width(96).Changed() {
+				// The select shows the labels; the settings keep the scene's id.
+				chosen := sceneByID(*scene).label()
+				if ui.Select(c.Key(key+"-scene"), &chosen, labels).Label(locales.AutoScene(label)).Width(96).Changed() {
+					*scene = scenes[slices.Index(labels, chosen)].id
 					s.autoChanged()
 				}
 			})
 		}
-		row("day", "白天", &s.dayStart, &s.prefs.DayScene)
-		row("night", "夜晚", &s.nightStart, &s.prefs.NightScene)
+		row("day", locales.AutoDay(), &s.dayStart, &s.prefs.DayScene)
+		row("night", locales.AutoNight(), &s.nightStart, &s.prefs.NightScene)
 		ui.Text(c, s.autoStatus()).FontSize(10).TextColor(muted)
 	})
 }
@@ -329,9 +335,9 @@ func (p *panel) modes(c *ui.Context) {
 		card(c, func() {
 			trailing := ""
 			if s.switchingTo != "" {
-				trailing = "切换中…"
+				trailing = locales.CompetitiveSwitching()
 			}
-			cardTitle(c, "320Hz 竞技模式", "sparkles", trailing)
+			cardTitle(c, locales.Competitive(), "sparkles", trailing)
 			on := s.competitive()
 			ui.Grid(c).Columns(2).Gap(6).Children(func() {
 				if chipText(c.Key("4k"), "4K 160Hz", !on) {
@@ -345,7 +351,7 @@ func (p *panel) modes(c *ui.Context) {
 	}
 	if rates := display.RefreshRates(s.modes, s.current); len(rates) > 1 {
 		card(c, func() {
-			cardTitle(c, "刷新率", "gauge", s.current.Title())
+			cardTitle(c, locales.RefreshRate(), "gauge", s.current.Title())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, m := range rates {
 					if chipText(c.Key(m.ID()), fmt.Sprintf("%d Hz", m.RefreshRate), m.RefreshRate == rate) {
@@ -355,8 +361,8 @@ func (p *panel) modes(c *ui.Context) {
 			})
 		})
 	}
-	p.resolutions(c, "HiDPI（清晰）", "zoom", display.Resolutions(s.modes, true, rate))
-	p.resolutions(c, "标准", "layers", display.Resolutions(s.modes, false, rate))
+	p.resolutions(c, locales.ModesHiDPI(), "zoom", display.Resolutions(s.modes, true, rate))
+	p.resolutions(c, locales.ModesStandard(), "layers", display.Resolutions(s.modes, false, rate))
 }
 
 func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []display.Mode) {
@@ -364,8 +370,8 @@ func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []displ
 	if len(modes) == 0 {
 		return
 	}
-	card(c.Key(title), func() {
-		cardTitle(c, title, iconName, fmt.Sprintf("%d 种", len(modes)))
+	card(c.Key(iconName), func() {
+		cardTitle(c, title, iconName, locales.ModesCount(len(modes)))
 		ui.Column(c).Gap(4).Children(func() {
 			for _, m := range modes {
 				selected := s.hasCurrent && m.SizeKey() == s.current.SizeKey()
@@ -382,7 +388,7 @@ func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []displ
 					}
 					detail := fmt.Sprintf("%d Hz", m.RefreshRate)
 					if m.HiDPI() {
-						detail = fmt.Sprintf("渲染 %d×%d", m.PixelWidth, m.PixelHeight)
+						detail = locales.ModeRendered(m.PixelWidth, m.PixelHeight)
 					}
 					ui.Text(c, detail).FontSize(10).TextColor(muted)
 					check := icon(c, "check").FontSize(10).TextColor(accent)
@@ -411,28 +417,28 @@ func (p *panel) activity(c *ui.Context) {
 		}
 	}
 	ui.Row(c).Gap(10).Children(func() {
-		statTile(c, "今日亮屏", duration(today.Awake), "sun")
-		statTile(c, "今日使用", duration(today.Active), "keyboard")
+		statTile(c, locales.ActivityAwakeToday(), duration(today.Awake), "sun")
+		statTile(c, locales.ActivityActiveToday(), duration(today.Active), "keyboard")
 	})
 	card(c, func() {
-		cardTitle(c, "最近 7 天", "calendar", "日均 "+duration(total/max(recorded, 1)))
+		cardTitle(c, locales.ActivityWeek(), "calendar", locales.ActivityAverage(duration(total/max(recorded, 1))))
 		ui.Row(c).Gap(8).AlignItems(ui.End).Children(func() {
 			for _, d := range s.usage {
 				p.dayBar(c.Key(d.Day), d, d.Day == today.Day, peak)
 			}
 		})
 		ui.Row(c).Gap(12).Children(func() {
-			legend(c, accent.Alpha(0.3), "亮屏")
-			legend(c, accent, "有键鼠操作")
+			legend(c, accent.Alpha(0.3), locales.ActivityAwake())
+			legend(c, accent, locales.ActivityActive())
 		})
 	})
-	ui.Text(c, "亮屏：显示器点亮的时长；使用：两分钟内有键盘或鼠标操作的时长。MonitorBar 运行时才会记录。").FontSize(10).TextColor(muted)
+	ui.Text(c, locales.ActivityNote()).FontSize(10).TextColor(muted)
 }
 
 func (p *panel) dayBar(c *ui.Context, d usage.Day, today bool, peak int) {
 	const track = 110
 	ui.Column(c).Grow(1).Gap(6).AlignItems(ui.Center).
-		Tooltip(fmt.Sprintf("%s  亮屏 %s · 使用 %s", d.Day, duration(d.Awake), duration(d.Active))).Children(func() {
+		Tooltip(locales.ActivityDay(d.Day, duration(d.Awake), duration(d.Active))).Children(func() {
 		ui.Box(c).FillWidth().Height(track).Radius(4).Background(ui.RGBA(255, 255, 255, 0.06)).Children(func() {
 			for _, bar := range []struct {
 				seconds int
@@ -468,9 +474,9 @@ func legend(c *ui.Context, color ui.Color, title string) {
 func duration(seconds int) string {
 	minutes := seconds / 60
 	if minutes < 60 {
-		return fmt.Sprintf("%d 分钟", minutes)
+		return locales.DurationMinutes(minutes)
 	}
-	return fmt.Sprintf("%d 小时 %d 分", minutes/60, minutes%60)
+	return locales.DurationHours(minutes/60, minutes%60)
 }
 
 func weekday(day string) string {
@@ -479,7 +485,7 @@ func weekday(day string) string {
 		return ""
 	}
 	if day == time.Now().Format(time.DateOnly) {
-		return "今天"
+		return locales.Today()
 	}
-	return [...]string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}[t.Weekday()]
+	return i18n.FormatDate(i18n.Locale(), t, i18n.DateOptions{Skeleton: "EEE"})
 }

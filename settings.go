@@ -32,7 +32,9 @@ type settings struct {
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
 	MediaKeys bool `json:"mediaKeys"`
-	path      string
+	// The language chosen in the panel, "" to follow the system's.
+	Language string `json:"language,omitempty"`
+	path     string
 }
 
 // dataDir is where MonitorBar keeps its files.
@@ -45,11 +47,18 @@ func dataDir() string {
 }
 
 func loadSettings() *settings {
-	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "日间", NightScene: "夜间",
+	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "day", NightScene: "night",
 		FollowMin: 10, FollowMax: 100,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
 		_ = json.Unmarshal(data, s)
+	}
+	// Before 1.7 the scenes were kept by their Chinese names.
+	legacy := map[string]string{"日间": "day", "阅读": "reading", "观影": "movie", "夜间": "night"}
+	for _, id := range []*string{&s.DayScene, &s.NightScene} {
+		if v, ok := legacy[*id]; ok {
+			*id = v
+		}
 	}
 	return s
 }

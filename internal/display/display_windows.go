@@ -163,9 +163,6 @@ func Target() Monitor {
 			fallback = m
 		}
 	}
-	if fallback.Name == "" {
-		fallback.Name = "显示器"
-	}
 	return fallback
 }
 
@@ -213,8 +210,6 @@ func outputTechnology(t uint32) string {
 		return "HDMI"
 	case 10, 11:
 		return "DisplayPort"
-	case 0x80000000:
-		return "内置"
 	}
 	return ""
 }

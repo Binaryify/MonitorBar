@@ -9,15 +9,27 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/binaryify/MonitorBar/internal/display"
 	"github.com/binaryify/MonitorBar/internal/mediakeys"
 	"github.com/binaryify/MonitorBar/internal/mitv"
 	"github.com/binaryify/MonitorBar/internal/usage"
+	"github.com/binaryify/MonitorBar/locales"
 )
+
+// The tests read the panel in Simplified Chinese, its first language,
+// unless they choose another.
+func TestMain(m *testing.M) {
+	i18n.SetLocaleFunc(func() string { return testLocale })
+	os.Exit(m.Run())
+}
+
+var testLocale = "zh-Hans"
 
 // testPanel is the panel over a store of fixed data, connected to the
 // display over the LAN, without touching the system.
@@ -36,7 +48,7 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 		soundToDisplay: func() bool { return true },
 		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
-	s.prefs.DayScene, s.prefs.NightScene = "日间", "夜间"
+	s.prefs.DayScene, s.prefs.NightScene = "day", "night"
 	s.dayStart, s.nightStart = parseClock("07:00", 0), parseClock("19:00", 0)
 	for _, rate := range []int{160, 144, 120, 60} {
 		for _, w := range []int{3360, 3200, 2560, 1920, 1600, 1280} {
@@ -55,7 +67,8 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 
 func newTester(p *panel) *ui.Tester {
 	tt := ui.NewTester(p.view, panelWidth, 1100)
-	for range 3 { // the scroll area takes its content's height a frame later
+	tt.SetLocale(testLocale) // MyGo's own controls
+	for range 3 {            // the scroll area takes its content's height a frame later
 		tt.Frame()
 	}
 	return tt
@@ -145,7 +158,7 @@ func TestDDCOnly(t *testing.T) {
 	s.link, s.inputs = nil, nil
 	s.hasBrightness, s.brightness = true, 70
 	s.ddcInputs = []mitv.Source{{ID: 0x0F, Name: display.InputName(0x0F)}, {ID: 0x11, Name: display.InputName(0x11)}}
-	s.controls = []control{{code: display.VCPContrast, name: "对比度", value: 50, max: 100}}
+	s.controls = []control{{code: display.VCPContrast, label: locales.ControlContrast, value: 50, max: 100}}
 	tt := newTester(p)
 	for _, want := range []string{"输入源", "DDC/CI", "DP", "HDMI 1", "组合 · 硬件背光 + 软件调光", "85"} {
 		if !tt.HasText(want) {
@@ -306,16 +319,15 @@ func TestSnapshots(t *testing.T) {
 	if dir == "" {
 		t.Skip("set MONITORBAR_SNAPSHOTS to a directory")
 	}
-	files := map[string]string{"概览": "overview", "画面": "picture", "分辨率": "modes", "屏幕时间": "activity"}
 	for _, tb := range tabs {
 		p, _ := testPanel(t)
-		p.s.prefs.Tab = tb.name
+		p.s.prefs.Tab = tb.id
 		tt := newTester(p)
 		tt.SetScale(2)
 		tt.Frame()
 		img := tt.Image()
 		crop := img.SubImage(image.Rect(0, 0, img.Bounds().Dx(), p.height*2))
-		f, err := os.Create(filepath.Join(dir, files[tb.name]+".png"))
+		f, err := os.Create(filepath.Join(dir, tb.id+".png"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +375,7 @@ func TestNoticeGrowsPanelWithoutInput(t *testing.T) {
 	if err := tt.Click("夜间"); err != nil { // Click draws only the frames the view asks for
 		t.Fatal(err)
 	}
-	if !tt.HasText(gammaLimited) {
+	if !tt.HasText(locales.NoticeGammaLimited()) {
 		t.Fatalf("no notice in %q", tt.Texts())
 	}
 	if p.height <= before {
@@ -529,5 +541,26 @@ func TestStepVolume(t *testing.T) {
 	s.stepVolume(5)
 	if s.volume != 100 {
 		t.Errorf("volume %v after +5 from 98", s.volume)
+	}
+}
+
+// In English every tab says nothing in Chinese: a string left out of the
+// catalogs would show.
+func TestEnglish(t *testing.T) {
+	testLocale = "en"
+	defer func() { testLocale = "zh-Hans" }()
+	for _, tb := range tabs {
+		p, _ := testPanel(t)
+		p.s.prefs.Tab, p.s.prefs.AutoSwitch = tb.id, true
+		p.s.hasBrightness, p.s.hasBuiltin, p.s.prefs.FollowBuiltin = true, true, true
+		tt := newTester(p)
+		for _, text := range tt.Texts() {
+			if strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Han, r) }) {
+				t.Errorf("tab %s: %q is in Chinese", tb.id, text)
+			}
+		}
+		if !tt.HasText(tb.label()) || !tt.HasText("External display · HDMI · 4K · 160Hz") {
+			t.Errorf("tab %s: missing the English title or caption in %q", tb.id, tt.Texts())
+		}
 	}
 }

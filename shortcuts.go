@@ -7,23 +7,26 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/binaryify/MonitorBar/locales"
 )
 
 // shortcut steps the brightness or the volume from anywhere (#9), with keys
 // the user can record anew.
 type shortcut struct {
-	id, title string
-	keys      string // the accelerator by default, such as "Ctrl+Alt+Up"
-	run       func(s *store)
+	id    string
+	title func() string
+	keys  string // the accelerator by default, such as "Ctrl+Alt+Up"
+	run   func(s *store)
 }
 
 const shortcutStep = 5 // points per press
 
 var shortcuts = []shortcut{
-	{"brightnessUp", "亮度 +", "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }},
-	{"brightnessDown", "亮度 −", "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }},
-	{"volumeUp", "音量 +", "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
-	{"volumeDown", "音量 −", "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
+	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }},
+	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }},
+	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
+	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
 }
 
 // keys is a shortcut's accelerator: the user's, else the default; "" when
@@ -55,7 +58,7 @@ func (s *store) registerShortcuts() {
 			s.redraw()
 		})
 		if err != nil {
-			s.notice = "快捷键 " + keysLabel(keys) + " 设置失败，可能已被其他应用占用"
+			s.notice = locales.ShortcutFailed(keysLabel(keys))
 			continue
 		}
 		s.registered[sc.id] = keys
@@ -130,7 +133,7 @@ var keyNames = func() map[ui.Key]string {
 // Ctrl+Alt+↑ elsewhere.
 func keysLabel(keys string) string {
 	if keys == "" {
-		return "未设置"
+		return locales.ShortcutNone()
 	}
 	arrows := map[string]string{"Up": "↑", "Down": "↓", "Left": "←", "Right": "→"}
 	mac := map[string]string{"Super": "⌘", "Ctrl": "⌃", "Alt": "⌥", "Shift": "⇧"}

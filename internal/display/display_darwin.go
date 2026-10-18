@@ -152,7 +152,7 @@ func screenName(id uint32) string {
 			return cString(objc.Send[*byte](screen.Send(sel("localizedName")), sel("UTF8String")))
 		}
 	}
-	return "显示器"
+	return "" // the panel names it
 }
 
 // connection reads the cable type ("HDMI", "DisplayPort") from IOKit.

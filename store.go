@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -17,19 +15,33 @@ import (
 	"github.com/binaryify/MonitorBar/internal/mitv"
 	"github.com/binaryify/MonitorBar/internal/schedule"
 	"github.com/binaryify/MonitorBar/internal/usage"
+	"github.com/binaryify/MonitorBar/locales"
 )
 
-// scene sets brightness and warmth at once.
+// scene sets brightness and warmth at once. Its id is kept in the
+// settings, for switching by the time.
 type scene struct {
-	name, icon         string
+	id                 string
+	label              func() string
+	icon               string
 	brightness, warmth float64
 }
 
 var scenes = []scene{
-	{"日间", "sun", 80, 0},
-	{"阅读", "book", 55, 25},
-	{"观影", "film", 100, 5},
-	{"夜间", "moon", 30, 55},
+	{"day", locales.SceneDay, "sun", 80, 0},
+	{"reading", locales.SceneReading, "book", 55, 25},
+	{"movie", locales.SceneMovie, "film", 100, 5},
+	{"night", locales.SceneNight, "moon", 30, 55},
+}
+
+// sceneByID finds a scene, the first for an id no scene has.
+func sceneByID(id string) scene {
+	for _, sc := range scenes {
+		if sc.id == id {
+			return sc
+		}
+	}
+	return scenes[0]
 }
 
 // store holds what the panel shows and the actions that change it. Its
@@ -104,18 +116,19 @@ type store struct {
 // control is a picture setting the monitor offers over DDC/CI.
 type control struct {
 	code  byte
-	name  string
+	label func() string
 	value float64
 	max   int
 }
 
 // controlCatalog lists the settings shown when the monitor answers them.
 var controlCatalog = []struct {
-	code byte
-	name string
+	code  byte
+	label func() string
 }{
-	{display.VCPContrast, "对比度"}, {display.VCPSharpness, "锐度"},
-	{display.VCPRedGain, "红色增益"}, {display.VCPGreenGain, "绿色增益"}, {display.VCPBlueGain, "蓝色增益"},
+	{display.VCPContrast, locales.ControlContrast}, {display.VCPSharpness, locales.ControlSharpness},
+	{display.VCPRedGain, locales.ControlRedGain}, {display.VCPGreenGain, locales.ControlGreenGain},
+	{display.VCPBlueGain, locales.ControlBlueGain},
 }
 
 func newStore() *store {
@@ -242,20 +255,15 @@ func (s *store) resetSoftware() {
 	s.applyGamma()
 }
 
-const (
-	gammaLimited = "Windows 限制了软件调光的幅度，已调到它允许的最暗。"
-	gammaFailed  = "调光失败：系统拒绝了这个设置。"
-)
-
 func (s *store) applyGamma() {
 	s.dirty = true
 	err := s.setGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100)
 	switch {
 	case errors.Is(err, display.ErrGammaLimited):
-		s.notice = gammaLimited
+		s.notice = locales.NoticeGammaLimited()
 	case err != nil:
-		s.notice = gammaFailed
-	case s.notice == gammaLimited || s.notice == gammaFailed:
+		s.notice = locales.NoticeGammaFailed()
+	case s.notice == locales.NoticeGammaLimited() || s.notice == locales.NoticeGammaFailed():
 		s.notice = ""
 	}
 }
@@ -273,7 +281,7 @@ func (s *store) sources() []mitv.Source {
 // inputChannel names how inputs are switched, for the inputs card.
 func (s *store) inputChannel() string {
 	if s.link != nil {
-		return "局域网"
+		return locales.InputsOverLan()
 	}
 	return "DDC/CI"
 }
@@ -333,7 +341,7 @@ func (s *store) selectInput(src mitv.Source) {
 	}
 	go func() {
 		if err := link.Select(src.ID); err != nil {
-			s.post(func() { s.notice = "切换到 " + src.Name + " 失败：显示器没有响应" })
+			s.post(func() { s.notice = locales.NoticeInputFailed(src.Name) })
 		}
 	}()
 }
@@ -380,7 +388,7 @@ func (s *store) chaseVolume() {
 			s.deviceVolume = actual
 			switch {
 			case failed:
-				s.notice = "调节音量失败：显示器没有响应"
+				s.notice = locales.NoticeVolumeFailed()
 			case int(s.volumeTarget.Load()) != actual:
 				s.chaseVolume() // the slider moved while the last step was sent
 			default:
@@ -503,7 +511,7 @@ func (s *store) applyDDC(r ddcReading) {
 	s.controls = nil
 	for _, c := range controlCatalog {
 		if v, ok := r.values[c.code]; ok {
-			s.controls = append(s.controls, control{code: c.code, name: c.name, value: float64(v[0]), max: v[1]})
+			s.controls = append(s.controls, control{code: c.code, label: c.label, value: float64(v[0]), max: v[1]})
 		}
 	}
 }
@@ -577,15 +585,11 @@ func (s *store) autoCheck() {
 	if string(period) == s.prefs.AutoPeriod {
 		return
 	}
-	name := s.prefs.DayScene
+	id := s.prefs.DayScene
 	if period == schedule.Night {
-		name = s.prefs.NightScene
+		id = s.prefs.NightScene
 	}
-	for _, sc := range scenes {
-		if sc.name == name {
-			s.apply(sc)
-		}
-	}
+	s.apply(sceneByID(id))
 	s.prefs.AutoPeriod, s.dirty = string(period), true
 }
 
@@ -607,9 +611,9 @@ func (s *store) autoTimes() schedule.Times {
 func (s *store) autoStatus() string {
 	period, next := s.autoTimes().At(s.now())
 	if period == schedule.Day {
-		return fmt.Sprintf("现在是白天，%s 切换到「%s」", next.Format("15:04"), s.prefs.NightScene)
+		return locales.AutoNowDay(next, sceneByID(s.prefs.NightScene).label())
 	}
-	return fmt.Sprintf("现在是夜晚，%s 切换到「%s」", next.Format("15:04"), s.prefs.DayScene)
+	return locales.AutoNowNight(next, sceneByID(s.prefs.DayScene).label())
 }
 
 // parseClock reads "15:04" into a time of day, or the fallback minutes.
@@ -704,9 +708,9 @@ func (s *store) checkUpdate(manual bool) {
 			switch {
 			case !manual:
 			case err != nil:
-				s.notice = "检查更新失败：网络不通或 GitHub 无法访问"
+				s.notice = locales.NoticeUpdateCheckFailed()
 			case up == nil:
-				s.notice = "已是最新版本 " + mygo.App.Version()
+				s.notice = locales.NoticeUpToDate(mygo.App.Version())
 			}
 		})
 	}()
@@ -735,7 +739,7 @@ func (s *store) installUpdate() {
 		})
 		s.post(func() {
 			if err != nil {
-				s.installing, s.notice = false, "更新失败，请稍后再试或从 GitHub 下载"
+				s.installing, s.notice = false, locales.NoticeUpdateFailed()
 				return
 			}
 			s.save()
@@ -748,9 +752,9 @@ func (s *store) installUpdate() {
 
 func (s *store) applyMode(m display.Mode) {
 	if err := s.monitor.Apply(m); err != nil {
-		s.notice = "切换失败，显示器拒绝了该模式"
+		s.notice = locales.NoticeModeRejected()
 	} else {
-		s.notice = "已切换到 " + m.Title() + " · " + strconv.Itoa(m.RefreshRate) + " Hz"
+		s.notice = locales.NoticeModeSwitched(m.Title(), m.RefreshRate)
 	}
 	s.refreshDisplay()
 }
@@ -778,9 +782,9 @@ func (s *store) setCompetitive(on bool) {
 		err := link.SetCompetitive(on)
 		s.post(func() {
 			if err != nil {
-				s.notice = "切换失败：显示器没有响应"
+				s.notice = locales.NoticeSwitchFailed()
 			} else {
-				s.notice = "显示器正在切换到 " + s.switchingTo + "，屏幕会黑几秒"
+				s.notice = locales.NoticeSwitching(s.switchingTo)
 			}
 			s.switchingTo = ""
 		})
@@ -840,7 +844,7 @@ func (s *store) recordUsage() {
 
 func (s *store) toggleLaunchAtLogin() {
 	if err := mygo.App.SetOpenAtLogin(!s.launchAtLogin); err != nil {
-		s.notice = "登录项设置失败：" + err.Error()
+		s.notice = locales.NoticeLoginFailed(err.Error())
 	}
 	s.launchAtLogin = mygo.App.OpenAtLogin()
 }

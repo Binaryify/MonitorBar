@@ -4,6 +4,10 @@
   "version": "1.0.0",
   "copyright": "Copyright © 2026 binaryify",
   "out": "build",
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
+  },
   "macos": {
     "infoPlist": {
       "LSUIElement": true,
