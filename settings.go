@@ -32,6 +32,8 @@ type settings struct {
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
 	MediaKeys bool `json:"mediaKeys"`
+	// Showing the level under the menu bar icon as the keys change it.
+	HUD bool `json:"hud"`
 	// The language chosen in the panel, "" to follow the system's.
 	Language string `json:"language,omitempty"`
 	path     string
@@ -48,7 +50,7 @@ func dataDir() string {
 
 func loadSettings() *settings {
 	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "day", NightScene: "night",
-		FollowMin: 10, FollowMax: 100,
+		FollowMin: 10, FollowMax: 100, HUD: true,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
 		_ = json.Unmarshal(data, s)

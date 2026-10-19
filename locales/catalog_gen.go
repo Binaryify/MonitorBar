@@ -737,6 +737,16 @@ func (msgs Messages) ShortcutFailed(keys string) string {
 	return Catalog.Format(msgs.locale, "shortcutFailed", map[string]any{"keys": keys})
 }
 
+// ShowHud says "Show the level as keys change it"
+// in the language the app shows.
+func ShowHud() string { return In(i18n.Locale()).ShowHud() }
+
+// ShowHud says "Show the level as keys change it"
+// in the language of msgs.
+func (msgs Messages) ShowHud() string {
+	return Catalog.Format(msgs.locale, "showHud", nil)
+}
+
 // MediaKeys says "Use the keyboard's brightness and volume keys"
 // in the language the app shows.
 func MediaKeys() string { return In(i18n.Locale()).MediaKeys() }

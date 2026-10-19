@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/binaryify/MonitorBar/internal/display"
+	"github.com/binaryify/MonitorBar/internal/keystate"
 	"github.com/binaryify/MonitorBar/internal/mitv"
 	"github.com/binaryify/MonitorBar/internal/schedule"
 	"github.com/binaryify/MonitorBar/internal/usage"
@@ -75,6 +76,10 @@ type store struct {
 	bindShortcuts bool // false in tests, which have no app to bind them
 	registered    map[string]string
 	recording     string
+	held          string                 // the shortcut whose keys are held, repeating it
+	keyHeld       func(keys string) bool // whether keys are still down, fixed in tests
+	// onAdjust shows the HUD for a level a key just set.
+	onAdjust func(hudKind)
 	// The media keys: taken where the user asked and macOS allows.
 	soundToDisplay  func() bool // whether the sound goes to the display, fixed in tests
 	mediaKeysDenied bool        // asked for, without the Accessibility permission
@@ -144,6 +149,8 @@ func newStore() *store {
 		lastBuiltin:    -1,
 		registered:     map[string]string{},
 		soundToDisplay: display.SoundToDisplay,
+		keyHeld:        keystate.Held,
+		onAdjust:       func(hudKind) {},
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()

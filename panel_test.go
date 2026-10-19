@@ -46,6 +46,7 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 		inputs:   []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 		volume:   80, hasVolume: true, deviceVolume: 80,
 		soundToDisplay: func() bool { return true },
+		onAdjust:       func(hudKind) {},
 		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
 	s.prefs.DayScene, s.prefs.NightScene = "day", "night"
@@ -526,6 +527,38 @@ func TestMediaKey(t *testing.T) {
 	s.soundToDisplay = func() bool { return false }
 	if step, _ := s.mediaKey(mediakeys.VolumeUp); step != nil {
 		t.Error("a key took the volume of sound playing elsewhere")
+	}
+}
+
+// A key that sets a level shows it in the HUD, when the user wants it; a
+// shortcut's keys held repeat it from the hold loop, not from each press.
+func TestHUD(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil // DDC/CI
+	var shown []hudKind
+	s.onAdjust = func(k hudKind) { shown = append(shown, k) }
+
+	step, _ := s.mediaKey(mediakeys.VolumeUp)
+	step()
+	if len(shown) != 0 {
+		t.Fatalf("HUD shown while turned off: %v", shown)
+	}
+	s.prefs.HUD = true
+	step()
+	s.press(shortcuts[4], "") // mute, which doesn't hold
+	if len(shown) != 2 || shown[0] != hudVolume || s.volume != 0 {
+		t.Fatalf("HUD %v, volume %v after up and mute", shown, s.volume)
+	}
+	if name, _, percent := s.hudLevel(hudVolume); name != "volumeOff" || percent != 0 {
+		t.Errorf("muted HUD shows %s at %v", name, percent)
+	}
+
+	s.held = shortcuts[1].id // brightness up, held
+	before := s.prefs.SoftBrightness
+	s.press(shortcuts[1], "Ctrl+Alt+Up")
+	if s.prefs.SoftBrightness != before || len(shown) != 2 {
+		t.Error("a repeated press of held keys stepped again")
 	}
 }
 

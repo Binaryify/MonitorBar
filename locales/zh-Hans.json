@@ -70,6 +70,7 @@
   "shortcutHint": "F1–F12 可单独使用，其他键需包含 Ctrl、Alt 或 Win；Esc 取消，Delete 清除",
   "shortcutHintMac": "F1–F12 可单独使用（Mac 键盘需按住 fn），其他键需包含 ⌃、⌥ 或 ⌘；Esc 取消，Delete 清除",
   "shortcutFailed": "快捷键 {keys} 设置失败，可能已被其他应用占用",
+  "showHud": "按键调节时在顶部显示数值",
   "mediaKeys": "接管键盘亮度、音量键",
   "mediaKeysNote": "高级：不按 fn 直接用 F1/F2 调外接亮度，声音走显示器时 F10 静音、F11/F12 调其音量；需要辅助功能权限",
   "mediaKeysDenied": "未获得辅助功能权限。请在列表中打开 MonitorBar；更新后若已打开仍无效，先用 − 移除再重新添加",

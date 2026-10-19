@@ -20,7 +20,7 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 			delta = -delta
 		}
 		// A MacBook's own display keeps its keys: both change together.
-		return func() { s.stepBrightness(delta) }, s.hasBuiltin
+		return func() { s.stepBrightness(delta); s.adjusted(hudBrightness) }, s.hasBuiltin
 	case mediakeys.VolumeUp, mediakeys.VolumeDown:
 		if !s.hasVolume || !s.soundToDisplay() {
 			return nil, false // the sound plays elsewhere, at macOS's volume
@@ -29,12 +29,12 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		if k == mediakeys.VolumeDown {
 			delta = -delta
 		}
-		return func() { s.stepVolume(delta) }, false
+		return func() { s.stepVolume(delta); s.adjusted(hudVolume) }, false
 	case mediakeys.Mute:
 		if !s.hasVolume || !s.soundToDisplay() {
 			return nil, false
 		}
-		return s.toggleMute, false
+		return func() { s.toggleMute(); s.adjusted(hudVolume) }, false
 	}
 	return nil, false
 }

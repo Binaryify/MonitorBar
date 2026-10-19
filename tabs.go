@@ -230,6 +230,12 @@ func (p *panel) shortcuts(c *ui.Context) {
 			}
 			ui.Text(c, hint).FontSize(10).TextColor(muted)
 		}
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, locales.ShowHud()).FontSize(11).Grow(1)
+			if ui.Switch(c.Key("hud"), &s.prefs.HUD).Label(locales.ShowHud()).Changed() {
+				s.dirty = true
+			}
+		})
 		if mediakeys.Supported {
 			p.mediaKeys(c)
 		}

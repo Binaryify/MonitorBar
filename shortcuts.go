@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -21,25 +22,35 @@ type shortcut struct {
 	title func() string
 	keys  string // the accelerator by default, such as "Ctrl+Alt+Up"
 	run   func(s *store)
+	hud   hudKind // what the HUD shows after it runs, "" for nothing
+	hold  bool    // holding the keys repeats it
 }
 
 const shortcutStep = 5 // points per press
 
+// Holding a stepping shortcut repeats it after a moment, as macOS repeats
+// its own brightness and volume keys, until the keys go up.
+const (
+	holdDelay  = 400 * time.Millisecond
+	holdRepeat = 80 * time.Millisecond // 0 to 100 in under 2 seconds
+	holdPoll   = 15 * time.Millisecond
+)
+
 // The keys going down come first, as the left one of two neighbouring keys,
 // such as F1 and F2, is the one recorded first.
 var shortcuts = []shortcut{
-	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }},
-	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }},
-	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
-	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
-	{"volumeMute", locales.ShortcutVolumeMute, "", func(s *store) { s.toggleMute() }},
+	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }, hudBrightness, true},
+	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }, hudBrightness, true},
+	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }, hudVolume, true},
+	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }, hudVolume, true},
+	{"volumeMute", locales.ShortcutVolumeMute, "", func(s *store) { s.toggleMute() }, hudVolume, false},
 }
 
 // inputShortcut switches to an input, with no keys by default. It is kept
 // by the input's id, so its keys stay while the display is away.
 func inputShortcut(src mitv.Source) shortcut {
-	return shortcut{inputShortcutPrefix + strconv.Itoa(src.ID), func() string { return locales.ShortcutInput(src.Name) }, "",
-		func(s *store) { s.switchInput(src.ID) }}
+	return shortcut{id: inputShortcutPrefix + strconv.Itoa(src.ID), title: func() string { return locales.ShortcutInput(src.Name) },
+		run: func(s *store) { s.switchInput(src.ID) }}
 }
 
 const inputShortcutPrefix = "input-"
@@ -101,16 +112,47 @@ func (s *store) registerShortcuts() {
 		if keys == "" {
 			continue
 		}
-		err := mygo.GlobalShortcut.Register(keys, func() {
-			sc.run(s)
-			s.redraw()
-		})
+		err := mygo.GlobalShortcut.Register(keys, func() { s.press(sc, keys) })
 		if err != nil {
 			s.notice = locales.ShortcutFailed(keysLabel(keys))
 			continue
 		}
 		s.registered[sc.id] = keys
 	}
+}
+
+// press runs a shortcut whose keys went down and, for one that holds,
+// again and again while they stay down. Presses heard while it is held are
+// the keyboard's repeat (Windows): the loop has taken over from them.
+func (s *store) press(sc shortcut, keys string) {
+	if s.held == sc.id {
+		return
+	}
+	step := func() {
+		sc.run(s)
+		s.adjusted(sc.hud)
+		s.redraw()
+	}
+	step()
+	if !sc.hold {
+		return
+	}
+	s.held = sc.id
+	go func() {
+		next := time.Now().Add(holdDelay)
+		for s.keyHeld(keys) {
+			if time.Now().After(next) {
+				next = next.Add(holdRepeat)
+				mygo.RunOnMain(step)
+			}
+			time.Sleep(holdPoll)
+		}
+		mygo.RunOnMain(func() {
+			if s.held == sc.id {
+				s.held = ""
+			}
+		})
+	}()
 }
 
 // record starts recording a shortcut's keys, or stops with "".

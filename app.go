@@ -24,6 +24,10 @@ type app struct {
 	tray   *mygo.Tray
 	flyout *mygo.Window // the open panel, or nil
 	closed time.Time    // when the panel last closed
+
+	hud      *mygo.Window // the level a key set, or nil
+	hudKind  hudKind
+	hudUntil time.Time // when the HUD goes
 }
 
 func (a *app) ready(show bool) {
@@ -34,6 +38,7 @@ func (a *app) ready(show bool) {
 		}
 	}
 	a.panel = &panel{s: a.s, height: 600, maxContent: 640, onHeight: a.resize}
+	a.s.onAdjust = a.showHUD
 
 	var err error
 	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), IconIsTemplate: true, ToolTip: "MonitorBar"})
@@ -135,6 +140,9 @@ func (a *app) open() {
 	if a.flyout != nil {
 		return
 	}
+	if a.hud != nil {
+		a.hud.Close()
+	}
 	a.s.panelOpened()
 	icon := a.tray.Bounds()
 	area := mygo.Screen.DisplayNearestPoint(mygo.Point{X: icon.X + icon.Width/2, Y: icon.Y + icon.Height/2}).WorkArea
@@ -167,7 +175,7 @@ func (a *app) resize(height int) {
 	if a.flyout == nil {
 		return
 	}
-	if corner, ok := a.corner(height); ok {
+	if corner, ok := a.corner(panelWidth, height); ok {
 		// SetSize would place the flyout again against an icon whose place
 		// is unknown, in the middle of the screen, before pointArrow moved
 		// it: set the size and the place at once, so it doesn't flash.
@@ -181,7 +189,7 @@ func (a *app) resize(height int) {
 // pointArrow aims the arrow at the icon's middle, wherever the panel was
 // placed against the screen's edges.
 func (a *app) pointArrow() {
-	if corner, ok := a.corner(a.flyout.Bounds().Height); ok {
+	if corner, ok := a.corner(panelWidth, a.flyout.Bounds().Height); ok {
 		a.flyout.SetBounds(corner)
 		return
 	}
@@ -190,15 +198,15 @@ func (a *app) pointArrow() {
 	a.flyout.Invalidate()
 }
 
-// corner is where the panel goes when the icon's place is unknown (Windows
-// keeps it in the notification area's overflow): the bottom right corner,
-// where Windows puts the panels of its own icons.
-func (a *app) corner(height int) (mygo.Rectangle, bool) {
+// corner is where the panel (or the HUD) goes when the icon's place is
+// unknown (Windows keeps it in the notification area's overflow): the
+// bottom right corner, where Windows puts the panels of its own icons.
+func (a *app) corner(width, height int) (mygo.Rectangle, bool) {
 	if runtime.GOOS != "windows" || a.tray.Bounds().Width != 0 {
 		return mygo.Rectangle{}, false
 	}
 	area := mygo.Screen.PrimaryDisplay().WorkArea
 	height = min(height, area.Height-24)
-	return mygo.Rectangle{X: area.X + area.Width - panelWidth - 12, Y: area.Y + area.Height - height - 12,
-		Width: panelWidth, Height: height}, true
+	return mygo.Rectangle{X: area.X + area.Width - width - 12, Y: area.Y + area.Height - height - 12,
+		Width: width, Height: height}, true
 }
