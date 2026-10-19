@@ -23,6 +23,7 @@ type app struct {
 	panel  *panel
 	tray   *mygo.Tray
 	flyout *mygo.Window // the open panel, or nil
+	closed time.Time    // when the panel last closed
 }
 
 func (a *app) ready(show bool) {
@@ -118,10 +119,14 @@ func (a *app) ready(show bool) {
 	}
 }
 
+// toggle opens the panel, or closes it. Recent macOS closes the panel as
+// the icon is pressed, a press outside it, before the click gets here: that
+// click only closes it, as AppKit's popovers do.
 func (a *app) toggle() {
-	if a.flyout != nil {
+	switch {
+	case a.flyout != nil:
 		a.close()
-	} else {
+	case time.Since(a.closed) > 500*time.Millisecond:
 		a.open()
 	}
 }
@@ -144,7 +149,7 @@ func (a *app) open() {
 		Content:   ui.View(a.panel.view),
 	})
 	a.flyout.OnClosed(func() {
-		a.flyout = nil
+		a.flyout, a.closed = nil, time.Now()
 		a.s.record("") // a shortcut left recording keeps its keys
 		a.s.save()
 	})

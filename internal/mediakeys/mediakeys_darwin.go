@@ -188,6 +188,8 @@ func tapped(proxy uintptr, kind uint32, event, info uintptr) uintptr {
 			k = BrightnessUp
 		case 3:
 			k = BrightnessDown
+		case 7:
+			k = Mute
 		default:
 			return event
 		}

@@ -25,11 +25,14 @@ type shortcut struct {
 
 const shortcutStep = 5 // points per press
 
+// The keys going down come first, as the left one of two neighbouring keys,
+// such as F1 and F2, is the one recorded first.
 var shortcuts = []shortcut{
-	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }},
 	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }},
-	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
+	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }},
 	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }},
+	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }},
+	{"volumeMute", locales.ShortcutVolumeMute, "", func(s *store) { s.toggleMute() }},
 }
 
 // inputShortcut switches to an input, with no keys by default. It is kept

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"math"
@@ -65,6 +66,7 @@ type store struct {
 	input     int // the input chosen in the app, 0 before any
 	volume    float64
 	hasVolume bool
+	unmuted   float64 // the volume to go back to from mute, 0 when not muted
 
 	usage         []usage.Day
 	launchAtLogin bool
@@ -353,7 +355,26 @@ func (s *store) stepVolume(delta float64) {
 	}
 }
 
+// toggleMute takes the volume to 0, or back to what it was: neither the LAN
+// remote nor every DDC/CI display has a mute.
+func (s *store) toggleMute() {
+	if !s.hasVolume {
+		return
+	}
+	if s.volume > 0 {
+		s.unmuted = s.volume
+		s.setVolume(0)
+		return
+	}
+	s.setVolume(cmp.Or(s.unmuted, defaultUnmuted))
+}
+
+const defaultUnmuted = 20 // the volume unmuting goes to, when it was muted elsewhere
+
 func (s *store) setVolume(percent float64) {
+	if percent > 0 {
+		s.unmuted = 0
+	}
 	s.volume = percent
 	if s.link == nil {
 		s.setDDC(display.VCPVolume, percent)

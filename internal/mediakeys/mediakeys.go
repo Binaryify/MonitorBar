@@ -1,5 +1,5 @@
 // Package mediakeys takes the keyboard's brightness and volume keys (F1, F2,
-// F11, F12 on a Mac without fn) from the system, for the external display.
+// F10, F11, F12 on a Mac without fn) from the system, for the external display.
 // On macOS this takes an event tap, which needs the Accessibility
 // permission; elsewhere it is not supported.
 package mediakeys
@@ -14,6 +14,7 @@ const (
 	BrightnessDown
 	VolumeUp
 	VolumeDown
+	Mute
 )
 
 // Handler gets each press (down) and release of a key, on the main thread,

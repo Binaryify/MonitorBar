@@ -587,6 +587,26 @@ func (msgs Messages) Shortcuts() string {
 	return Catalog.Format(msgs.locale, "shortcuts", nil)
 }
 
+// Mute says "Mute"
+// in the language the app shows.
+func Mute() string { return In(i18n.Locale()).Mute() }
+
+// Mute says "Mute"
+// in the language of msgs.
+func (msgs Messages) Mute() string {
+	return Catalog.Format(msgs.locale, "mute", nil)
+}
+
+// Unmute says "Unmute"
+// in the language the app shows.
+func Unmute() string { return In(i18n.Locale()).Unmute() }
+
+// Unmute says "Unmute"
+// in the language of msgs.
+func (msgs Messages) Unmute() string {
+	return Catalog.Format(msgs.locale, "unmute", nil)
+}
+
 // ShortcutsNote says "Click, then press keys"
 // in the language the app shows.
 func ShortcutsNote() string { return In(i18n.Locale()).ShortcutsNote() }
@@ -635,6 +655,16 @@ func ShortcutVolumeDown() string { return In(i18n.Locale()).ShortcutVolumeDown()
 // in the language of msgs.
 func (msgs Messages) ShortcutVolumeDown() string {
 	return Catalog.Format(msgs.locale, "shortcutVolumeDown", nil)
+}
+
+// ShortcutVolumeMute says "Mute / Unmute"
+// in the language the app shows.
+func ShortcutVolumeMute() string { return In(i18n.Locale()).ShortcutVolumeMute() }
+
+// ShortcutVolumeMute says "Mute / Unmute"
+// in the language of msgs.
+func (msgs Messages) ShortcutVolumeMute() string {
+	return Catalog.Format(msgs.locale, "shortcutVolumeMute", nil)
 }
 
 // ShortcutInput says "Switch to {input}"
@@ -717,11 +747,11 @@ func (msgs Messages) MediaKeys() string {
 	return Catalog.Format(msgs.locale, "mediaKeys", nil)
 }
 
-// MediaKeysNote says "Advanced: F1/F2 without fn set the external brightness, and F11/F12 its volume while the sound plays on it. Needs the…"
+// MediaKeysNote says "Advanced: F1/F2 without fn set the external brightness, and F10/F11/F12 mute it and set its volume while the sound pl…"
 // in the language the app shows.
 func MediaKeysNote() string { return In(i18n.Locale()).MediaKeysNote() }
 
-// MediaKeysNote says "Advanced: F1/F2 without fn set the external brightness, and F11/F12 its volume while the sound plays on it. Needs the…"
+// MediaKeysNote says "Advanced: F1/F2 without fn set the external brightness, and F10/F11/F12 mute it and set its volume while the sound pl…"
 // in the language of msgs.
 func (msgs Messages) MediaKeysNote() string {
 	return Catalog.Format(msgs.locale, "mediaKeysNote", nil)

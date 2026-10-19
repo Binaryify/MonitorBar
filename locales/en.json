@@ -82,11 +82,14 @@
   "controlNote": "Hardware · DDC/CI",
   "resetSoftware": "Reset Software Adjustments",
   "shortcuts": "Shortcuts",
+  "mute": "Mute",
+  "unmute": "Unmute",
   "shortcutsNote": "Click, then press keys",
   "shortcutBrightnessUp": "Brightness +",
   "shortcutBrightnessDown": "Brightness −",
   "shortcutVolumeUp": "Volume +",
   "shortcutVolumeDown": "Volume −",
+  "shortcutVolumeMute": "Mute / Unmute",
   "shortcutInput": "Switch to {input}",
   "@shortcutInput": {
     "placeholders": {
@@ -116,7 +119,7 @@
     }
   },
   "mediaKeys": "Use the keyboard's brightness and volume keys",
-  "mediaKeysNote": "Advanced: F1/F2 without fn set the external brightness, and F11/F12 its volume while the sound plays on it. Needs the Accessibility permission.",
+  "mediaKeysNote": "Advanced: F1/F2 without fn set the external brightness, and F10/F11/F12 mute it and set its volume while the sound plays on it. Needs the Accessibility permission.",
   "mediaKeysDenied": "No Accessibility permission. Turn MonitorBar on in the list; if it's on and still doesn't work after an update, remove it with − and add it again.",
   "mediaKeysSettings": "Open Accessibility Settings",
   "follow": "Follow the Built-in Display",

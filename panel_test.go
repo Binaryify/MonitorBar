@@ -450,11 +450,11 @@ func TestRecordShortcut(t *testing.T) {
 	}
 	record := func() {
 		t.Helper()
-		if err := tt.Click("亮度 +快捷键"); err != nil {
+		if err := tt.Click("亮度 −快捷键"); err != nil {
 			t.Fatal(err)
 		}
 		tt.Frame()
-		if s.recording != "brightnessUp" {
+		if s.recording != "brightnessDown" {
 			t.Fatalf("recording %q after the click", s.recording)
 		}
 	}
@@ -469,14 +469,14 @@ func TestRecordShortcut(t *testing.T) {
 		t.Errorf("after Ctrl+Alt+B: keys %q, recording %q", got, s.recording)
 	}
 	record()
-	tt.Key(0, ui.KeyF2) // a function key types nothing, so it needs no modifier
+	tt.Key(0, ui.KeyF1) // a function key types nothing, so it needs no modifier
 	tt.Frame()
-	if got := s.prefs.keys(shortcuts[0]); got != "F2" || s.recording != "" {
-		t.Errorf("after F2: keys %q, recording %q", got, s.recording)
+	if got := s.prefs.keys(shortcuts[0]); got != "F1" || s.recording != "" {
+		t.Errorf("after F1: keys %q, recording %q", got, s.recording)
 	}
 	record()
 	tt.Key(0, ui.KeyEscape)
-	if got := s.prefs.keys(shortcuts[0]); got != "F2" || s.recording != "" {
+	if got := s.prefs.keys(shortcuts[0]); got != "F1" || s.recording != "" {
 		t.Errorf("after Esc: keys %q, recording %q", got, s.recording)
 	}
 	record()
@@ -544,6 +544,32 @@ func TestStepVolume(t *testing.T) {
 	}
 }
 
+// The volume card's button and the mute key take the volume to 0 and back.
+func TestMute(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil // DDC/CI, without the LAN remote's key presses
+	tt := newTester(p)
+	if err := tt.Click("静音"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if s.volume != 0 || !tt.HasText("0") {
+		t.Fatalf("volume %v after muting from 80", s.volume)
+	}
+	mute, _ := s.mediaKey(mediakeys.Mute)
+	if mute == nil {
+		t.Fatal("the mute key left to macOS with the sound on the display")
+	}
+	if mute(); s.volume != 80 {
+		t.Errorf("volume %v after unmuting, not 80", s.volume)
+	}
+	s.setVolume(0) // muted with the slider: unmuting goes to a default
+	if s.toggleMute(); s.volume != defaultUnmuted {
+		t.Errorf("volume %v after unmuting from the slider's 0", s.volume)
+	}
+}
+
 // In English every tab says nothing in Chinese: a string left out of the
 // catalogs would show.
 func TestEnglish(t *testing.T) {
@@ -578,6 +604,8 @@ func TestInputShortcut(t *testing.T) {
 	if !tt.HasText("切换到 HDMI2") {
 		t.Fatalf("no shortcut for HDMI2 in %q", tt.Texts())
 	}
+	tt.Scroll(panelWidth/2, 300, 0, 1000) // the list ends below the panel
+	tt.Frame()
 	if err := tt.Click("切换到 HDMI2快捷键"); err != nil {
 		t.Fatal(err)
 	}

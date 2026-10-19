@@ -100,7 +100,15 @@ func (p *panel) volume(c *ui.Context) {
 	s := p.s
 	card(c, func() {
 		ui.Row(c).Gap(8).Children(func() {
-			icon(c, "volume").FontSize(14).TextColor(muted).Width(18)
+			name, label := "volume", locales.Mute()
+			if s.volume == 0 {
+				name, label = "volumeOff", locales.Unmute()
+			}
+			mute := chip(c.Key("mute"), s.volume == 0).Size(26, 22).Label(label)
+			mute.Children(func() { icon(c, name).FontSize(12) })
+			if mute.Clicked() {
+				s.toggleMute()
+			}
 			ui.Text(c, locales.Volume()).FontSize(12).FontWeight(600).Grow(1)
 			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})

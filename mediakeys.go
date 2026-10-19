@@ -30,6 +30,11 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 			delta = -delta
 		}
 		return func() { s.stepVolume(delta) }, false
+	case mediakeys.Mute:
+		if !s.hasVolume || !s.soundToDisplay() {
+			return nil, false
+		}
+		return s.toggleMute, false
 	}
 	return nil, false
 }
