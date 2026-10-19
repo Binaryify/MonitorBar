@@ -119,8 +119,8 @@ func load() {
 			&ioServiceMatching: "IOServiceMatching", &ioServiceGetMatchingServices: "IOServiceGetMatchingServices",
 			&ioIteratorNext: "IOIteratorNext", &ioObjectRelease: "IOObjectRelease",
 			&ioRegistryEntryCreateCFProperty: "IORegistryEntryCreateCFProperty",
-			&ioFBCopyI2CInterfaceForBus: "IOFBCopyI2CInterfaceForBus",
-			&ioI2CInterfaceOpen: "IOI2CInterfaceOpen", &ioI2CInterfaceClose: "IOI2CInterfaceClose",
+			&ioFBCopyI2CInterfaceForBus:      "IOFBCopyI2CInterfaceForBus",
+			&ioI2CInterfaceOpen:              "IOI2CInterfaceOpen", &ioI2CInterfaceClose: "IOI2CInterfaceClose",
 			&ioI2CSendRequest: "IOI2CSendRequest", &ioDisplayCreateInfoDictionary: "IODisplayCreateInfoDictionary",
 		} {
 			purego.RegisterLibFunc(fn, io, name)
