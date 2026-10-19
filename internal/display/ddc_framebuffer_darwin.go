@@ -5,6 +5,7 @@ package display
 import (
 	"bytes"
 	"errors"
+	"runtime"
 	"time"
 	"unsafe"
 )
@@ -26,28 +27,33 @@ const (
 	i2cSettleDelay       = 10 * time.Millisecond
 )
 
-// newI2CRequest fills the fields the bus reads: the two transaction types, the
-// addresses (0x6E to write, 0x6F to read, sub-address 0x51), the buffers and
-// their sizes.
-func newI2CRequest(sendType, replyType uint32, send, reply []byte) *i2cRequest {
+// request runs one I2C transaction: it fills the fields the bus reads (the
+// two transaction types, the addresses: 0x6E to write, 0x6F to read,
+// sub-address 0x51, the buffers and their sizes) and sends it. The request
+// holds the buffers' addresses as plain words, which Go can't see, so they are
+// pinned: a stack buffer would otherwise move when the stack grows, and a heap
+// one could be freed before IOKit is done with it.
+func (d *fbDDC) request(sendType, replyType uint32, send, reply []byte) bool {
+	var pin runtime.Pinner
+	defer pin.Unpin()
 	r := &i2cRequest{}
 	r.words[0] = sendType
 	r.words[1] = replyType
-	r.words[2] = 0x6E // send address: the monitor's DDC/CI bus
-	r.words[3] = 0x6F // reply address
+	r.words[2] = 0x6E      // send address: the monitor's DDC/CI bus
+	r.words[3] = 0x6F      // reply address
 	r.words[4] = 0x51 << 8 // reply sub-address
 	r.words[5] = uint32(i2cReplyDelay / time.Nanosecond)
 	r.words[10] = uint32(len(send))
 	r.words[14] = uint32(len(reply))
 	if len(send) > 0 {
-		lo, hi := splitPointer(uintptr(unsafe.Pointer(&send[0])))
-		r.words[17], r.words[18] = lo, hi
+		pin.Pin(&send[0])
+		r.words[17], r.words[18] = splitPointer(uintptr(unsafe.Pointer(&send[0])))
 	}
 	if len(reply) > 0 {
-		lo, hi := splitPointer(uintptr(unsafe.Pointer(&reply[0])))
-		r.words[19], r.words[20] = lo, hi
+		pin.Pin(&reply[0])
+		r.words[19], r.words[20] = splitPointer(uintptr(unsafe.Pointer(&reply[0])))
 	}
-	return r
+	return ioI2CSendRequest(d.connect, 0, r) == 0 && r.result() == 0
 }
 
 // result is the transaction's IOReturn: 0 when the bus did what it was asked.
@@ -57,7 +63,7 @@ func splitPointer(p uintptr) (lo, hi uint32) { return uint32(p), uint32(uint64(p
 
 type fbDDC struct {
 	connect   uintptr // IOI2CConnectRef
-	replyType uint32 // kIOI2CDDCciReplyTransactionType, or simple where unsupported
+	replyType uint32  // kIOI2CDDCciReplyTransactionType, or simple where unsupported
 }
 
 func (d *fbDDC) close() {
@@ -84,8 +90,7 @@ func (d *fbDDC) transact(payload, reply []byte) bool {
 	buf := append([]byte{0x51}, packet(payload)...) // 0x51: the DDC/CI sub-address
 	for range 3 {
 		time.Sleep(i2cSettleDelay) // the monitor needs a gap between transactions
-		req := newI2CRequest(i2cSimpleTransaction, d.replyType, buf, reply)
-		if ioI2CSendRequest(d.connect, 0, req) == 0 && req.result() == 0 {
+		if d.request(i2cSimpleTransaction, d.replyType, buf, reply) {
 			return true
 		}
 	}
@@ -94,9 +99,8 @@ func (d *fbDDC) transact(payload, reply []byte) bool {
 
 // write sends a packet and waits for the monitor to swallow it.
 func (d *fbDDC) write(code byte, value int) bool {
-	req := newI2CRequest(i2cSimpleTransaction, i2cNoTransaction,
-		append([]byte{0x51}, packet([]byte{0x03, code, byte(value >> 8), byte(value)})...), nil)
-	if ioI2CSendRequest(d.connect, 0, req) != 0 || req.result() != 0 {
+	buf := append([]byte{0x51}, packet([]byte{0x03, code, byte(value >> 8), byte(value)})...)
+	if !d.request(i2cSimpleTransaction, i2cNoTransaction, buf, nil) {
 		return false
 	}
 	time.Sleep(20 * time.Millisecond) // the monitor can't take the next packet before this
@@ -214,8 +218,8 @@ func sameDisplay(entry, vendor, product, serial uint32) bool {
 		k := cfStringCreateWithCString(0, key, utf8Encoding)
 		number := cfDictionaryGetValue(info, k)
 		cfRelease(k)
-		var got int32
-		if number == 0 || !cfNumberGetValue(number, cfNumberSInt32Type, unsafe.Pointer(&got)) || uint32(got) != want {
+		var got int32 // absent, as the serial of an EDID that has none: 0
+		if number != 0 && !cfNumberGetValue(number, cfNumberSInt32Type, unsafe.Pointer(&got)) || uint32(got) != want {
 			return false
 		}
 	}
