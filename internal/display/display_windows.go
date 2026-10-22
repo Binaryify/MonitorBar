@@ -139,9 +139,11 @@ const (
 	dmFieldsForMode      = 0x40000 | 0x80000 | 0x100000 | 0x400000 // bits per pixel, width, height, frequency
 )
 
-// Target returns the primary display: a desktop's monitors are all external.
+// Target returns the external display, the primary one if several are; a
+// laptop's own panel only when no external one is on, as on macOS.
 func Target() Monitor {
-	var fallback Monitor
+	var best Monitor
+	bestRank := -1
 	for i := uint32(0); ; i++ {
 		var dd displayDevice
 		dd.Size = uint32(unsafe.Sizeof(dd))
@@ -152,33 +154,38 @@ func Target() Monitor {
 			continue
 		}
 		m := Monitor{handle: windows.UTF16ToString(dd.DeviceName[:])}
-		m.Name, m.Connection, m.NativeWidth, m.NativeHeight = targetInfo(m.handle)
+		m.Name, m.Connection, m.NativeWidth, m.NativeHeight, m.Builtin = targetInfo(m.handle)
 		if m.Name == "" {
 			m.Name = monitorString(dd.DeviceName[:])
 		}
-		if dd.StateFlags&primaryDevice != 0 {
-			return m
+		rank := 0
+		if !m.Builtin {
+			rank += 2
 		}
-		if fallback.handle == "" {
-			fallback = m
+		if dd.StateFlags&primaryDevice != 0 {
+			rank++
+		}
+		if rank > bestRank {
+			best, bestRank = m, rank
 		}
 	}
-	return fallback
+	return best
 }
 
-// targetInfo finds the monitor's friendly name, cable type and preferred
-// (native) resolution through the display path whose source is the GDI
-// device. DSR and similar list modes larger than the panel; this one is not.
-func targetInfo(device string) (name, connection string, width, height int) {
+// targetInfo finds the monitor's friendly name, cable type, preferred
+// (native) resolution and whether it is a laptop's own panel through the
+// display path whose source is the GDI device. DSR and similar list modes
+// larger than the panel; this one is not.
+func targetInfo(device string) (name, connection string, width, height int, internal bool) {
 	var nPaths, nModes uint32
 	if r, _, _ := procGetDisplayConfigBufferSizes.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&nModes))); r != 0 || nPaths == 0 {
-		return "", "", 0, 0
+		return "", "", 0, 0, false
 	}
 	paths := make([]pathInfo, nPaths)
 	modes := make([][64]byte, max(nModes, 1))
 	if r, _, _ := procQueryDisplayConfig.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&paths[0])),
 		uintptr(unsafe.Pointer(&nModes)), uintptr(unsafe.Pointer(&modes[0])), 0); r != 0 {
-		return "", "", 0, 0
+		return "", "", 0, 0, false
 	}
 	for _, p := range paths[:nPaths] {
 		source := sourceDeviceName{Header: deviceInfoHeader{Type: getSourceName, Adapter: p.SourceAdapter, ID: p.SourceID}}
@@ -195,9 +202,10 @@ func targetInfo(device string) (name, connection string, width, height int) {
 		preferred := targetPreferredMode{Header: deviceInfoHeader{Type: getPreferredMode, Adapter: p.TargetAdapter, ID: p.TargetID}}
 		preferred.Header.Size = uint32(unsafe.Sizeof(preferred))
 		procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&preferred)))
-		return windows.UTF16ToString(target.FriendlyName[:]), outputTechnology(target.OutputTechnology), int(preferred.Width), int(preferred.Height)
+		return windows.UTF16ToString(target.FriendlyName[:]), outputTechnology(target.OutputTechnology), int(preferred.Width), int(preferred.Height),
+			builtinOutput(target.OutputTechnology)
 	}
-	return "", "", 0, 0
+	return "", "", 0, 0, false
 }
 
 func outputTechnology(t uint32) string {
@@ -208,10 +216,16 @@ func outputTechnology(t uint32) string {
 		return "DVI"
 	case 5:
 		return "HDMI"
-	case 10, 11:
+	case 10:
 		return "DisplayPort"
 	}
 	return ""
+}
+
+// builtinOutput tells a laptop's own panel: LVDS, embedded DisplayPort or
+// UDI, or the adapter's internal connection.
+func builtinOutput(t uint32) bool {
+	return t == 6 || t == 11 || t == 13 || t == 0x80000000
 }
 
 // monitorString is the monitor's device string, such as "Generic PnP Monitor".
