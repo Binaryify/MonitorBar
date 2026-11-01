@@ -54,6 +54,10 @@ func (p *panel) overview(c *ui.Context) {
 	}
 	if s.hasVolume {
 		p.volume(c)
+		for _, peer := range s.peers {
+			other := &panel{s: peer}
+			other.volume(c.Key(peer.link.Host))
+		}
 	}
 	p.scenes(c)
 }
@@ -109,7 +113,15 @@ func (p *panel) volume(c *ui.Context) {
 			if mute.Clicked() {
 				s.toggleMute()
 			}
-			ui.Text(c, locales.Volume()).FontSize(12).FontWeight(600).Grow(1)
+			title := locales.Volume()
+			if s.link != nil {
+				name := s.prefs.DeviceNames[s.link.Host]
+				if name == "" {
+					name = s.link.Host
+				}
+				title += " · " + name
+			}
+			ui.Text(c, title).FontSize(12).FontWeight(600).Grow(1)
 			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
 		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label(locales.Volume()).Changed() {

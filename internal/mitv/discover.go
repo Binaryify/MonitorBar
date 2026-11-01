@@ -41,10 +41,17 @@ func hasMonitorInput(sources []Source) bool {
 // mDNS only by multicast to port 5353, which the system's own responder
 // holds, so a scan is the portable way.)
 func Discover() (string, error) {
+	h, e := DiscoverAll()
+	if e != nil {
+		return "", e
+	}
+	return h[0], nil
+}
+func DiscoverAll() ([]string, error) {
 	var (
-		mu      sync.Mutex
-		monitor string
-		wg      sync.WaitGroup
+		mu       sync.Mutex
+		monitors []string
+		wg       sync.WaitGroup
 	)
 	for _, host := range candidates() {
 		wg.Add(1)
@@ -57,16 +64,17 @@ func Discover() (string, error) {
 			conn.Close()
 			if New(host).IsMonitor() {
 				mu.Lock()
-				monitor = host
+				monitors = append(monitors, host)
 				mu.Unlock()
 			}
 		}()
 	}
 	wg.Wait()
-	if monitor == "" {
-		return "", ErrNotFound
+	if len(monitors) == 0 {
+		return nil, ErrNotFound
 	}
-	return monitor, nil
+	slices.Sort(monitors)
+	return slices.Compact(monitors), nil
 }
 
 // candidates lists the other addresses of each private IPv4 /24 we are on.

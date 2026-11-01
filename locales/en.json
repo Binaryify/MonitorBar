@@ -302,5 +302,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "tabSync": "Sync",
+  "dualTitle": "Multiple displays",
+  "dualHint": "Audio devices are identified by IP; screen selection controls picture settings.",
+  "syncVolume": "Sync volume and mute",
+  "syncPicture": "Sync software brightness and warmth",
+  "syncResolution": "Sync resolution and refresh rate",
+  "dualDiscover": "Discover audio devices",
+  "dualNote": "Enabling copies current settings. Inputs stay independent.",
+  "deviceName": "Device name",
+  "syncModeUnsupported": "Another display does not support this mode; nothing changed.",
+  "syncModeFailed": "Resolution sync failed. Check the current display modes."
 }

@@ -136,3 +136,5 @@ func gains(brightness, warmth float64) (r, g, b float64) {
 
 // neutral reports settings that leave the display untouched.
 func neutral(brightness, warmth float64) bool { return brightness >= 0.999 && warmth <= 0.001 }
+
+func (m Monitor) Same(other Monitor) bool { return m.handle == other.handle }

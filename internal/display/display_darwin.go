@@ -329,3 +329,17 @@ func cString(p *byte) string {
 	}
 	return string(b)
 }
+
+func ExternalMonitors() []Monitor {
+	load()
+	var ids [16]uint32
+	var n uint32
+	cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n)
+	var out []Monitor
+	for _, id := range ids[:n] {
+		if cgDisplayIsBuiltin(id) == 0 {
+			out = append(out, Monitor{Name: screenName(id), handle: id})
+		}
+	}
+	return out
+}

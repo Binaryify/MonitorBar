@@ -1238,3 +1238,113 @@ func NoticeLoginFailed(error string) string { return In(i18n.Locale()).NoticeLog
 func (msgs Messages) NoticeLoginFailed(error string) string {
 	return Catalog.Format(msgs.locale, "noticeLoginFailed", map[string]any{"error": error})
 }
+
+// TabSync says "Sync"
+// in the language the app shows.
+func TabSync() string { return In(i18n.Locale()).TabSync() }
+
+// TabSync says "Sync"
+// in the language of msgs.
+func (msgs Messages) TabSync() string {
+	return Catalog.Format(msgs.locale, "tabSync", nil)
+}
+
+// DualTitle says "Multiple displays"
+// in the language the app shows.
+func DualTitle() string { return In(i18n.Locale()).DualTitle() }
+
+// DualTitle says "Multiple displays"
+// in the language of msgs.
+func (msgs Messages) DualTitle() string {
+	return Catalog.Format(msgs.locale, "dualTitle", nil)
+}
+
+// DualHint says "Audio devices are identified by IP; screen selection controls picture settings."
+// in the language the app shows.
+func DualHint() string { return In(i18n.Locale()).DualHint() }
+
+// DualHint says "Audio devices are identified by IP; screen selection controls picture settings."
+// in the language of msgs.
+func (msgs Messages) DualHint() string {
+	return Catalog.Format(msgs.locale, "dualHint", nil)
+}
+
+// SyncVolume says "Sync volume and mute"
+// in the language the app shows.
+func SyncVolume() string { return In(i18n.Locale()).SyncVolume() }
+
+// SyncVolume says "Sync volume and mute"
+// in the language of msgs.
+func (msgs Messages) SyncVolume() string {
+	return Catalog.Format(msgs.locale, "syncVolume", nil)
+}
+
+// SyncPicture says "Sync software brightness and warmth"
+// in the language the app shows.
+func SyncPicture() string { return In(i18n.Locale()).SyncPicture() }
+
+// SyncPicture says "Sync software brightness and warmth"
+// in the language of msgs.
+func (msgs Messages) SyncPicture() string {
+	return Catalog.Format(msgs.locale, "syncPicture", nil)
+}
+
+// SyncResolution says "Sync resolution and refresh rate"
+// in the language the app shows.
+func SyncResolution() string { return In(i18n.Locale()).SyncResolution() }
+
+// SyncResolution says "Sync resolution and refresh rate"
+// in the language of msgs.
+func (msgs Messages) SyncResolution() string {
+	return Catalog.Format(msgs.locale, "syncResolution", nil)
+}
+
+// DualDiscover says "Discover audio devices"
+// in the language the app shows.
+func DualDiscover() string { return In(i18n.Locale()).DualDiscover() }
+
+// DualDiscover says "Discover audio devices"
+// in the language of msgs.
+func (msgs Messages) DualDiscover() string {
+	return Catalog.Format(msgs.locale, "dualDiscover", nil)
+}
+
+// DualNote says "Enabling copies current settings. Inputs stay independent."
+// in the language the app shows.
+func DualNote() string { return In(i18n.Locale()).DualNote() }
+
+// DualNote says "Enabling copies current settings. Inputs stay independent."
+// in the language of msgs.
+func (msgs Messages) DualNote() string {
+	return Catalog.Format(msgs.locale, "dualNote", nil)
+}
+
+// DeviceName says "Device name"
+// in the language the app shows.
+func DeviceName() string { return In(i18n.Locale()).DeviceName() }
+
+// DeviceName says "Device name"
+// in the language of msgs.
+func (msgs Messages) DeviceName() string {
+	return Catalog.Format(msgs.locale, "deviceName", nil)
+}
+
+// SyncModeUnsupported says "Another display does not support this mode; nothing changed."
+// in the language the app shows.
+func SyncModeUnsupported() string { return In(i18n.Locale()).SyncModeUnsupported() }
+
+// SyncModeUnsupported says "Another display does not support this mode; nothing changed."
+// in the language of msgs.
+func (msgs Messages) SyncModeUnsupported() string {
+	return Catalog.Format(msgs.locale, "syncModeUnsupported", nil)
+}
+
+// SyncModeFailed says "Resolution sync failed. Check the current display modes."
+// in the language the app shows.
+func SyncModeFailed() string { return In(i18n.Locale()).SyncModeFailed() }
+
+// SyncModeFailed says "Resolution sync failed. Check the current display modes."
+// in the language of msgs.
+func (msgs Messages) SyncModeFailed() string {
+	return Catalog.Format(msgs.locale, "syncModeFailed", nil)
+}

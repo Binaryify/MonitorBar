@@ -12,8 +12,9 @@ import (
 type audioPropertyAddress struct{ selector, scope, element uint32 }
 
 var (
-	audioObjectGetPropertyData func(object uint32, address *audioPropertyAddress, qualifierSize uint32, qualifier uintptr, size *uint32, data unsafe.Pointer) int32
-	audioOnce                  sync.Once
+	audioObjectGetPropertyData     func(object uint32, address *audioPropertyAddress, qualifierSize uint32, qualifier uintptr, size *uint32, data unsafe.Pointer) int32
+	audioObjectGetPropertyDataSize func(uint32, *audioPropertyAddress, uint32, uintptr, *uint32) int32
+	audioOnce                      sync.Once
 )
 
 // fourCC packs a Core Audio four-character code.
@@ -30,6 +31,7 @@ func SoundToDisplay() bool {
 			return
 		}
 		purego.RegisterLibFunc(&audioObjectGetPropertyData, lib, "AudioObjectGetPropertyData")
+		purego.RegisterLibFunc(&audioObjectGetPropertyDataSize, lib, "AudioObjectGetPropertyDataSize")
 	})
 	if audioObjectGetPropertyData == nil {
 		return false
@@ -39,12 +41,36 @@ func SoundToDisplay() bool {
 		address := audioPropertyAddress{fourCC(selector), fourCC("glob"), 0}
 		var value uint32
 		size := uint32(unsafe.Sizeof(value))
-		return value, audioObjectGetPropertyData(object, &address, 0, 0, &size, unsafe.Pointer(&value)) == 0
+		ok := audioObjectGetPropertyData(object, &address, 0, 0, &size, unsafe.Pointer(&value)) == 0
+		return value, ok
 	}
 	device, ok := get(systemObject, "dOut") // the default output device
 	if !ok || device == 0 {
 		return false
 	}
-	transport, ok := get(device, "tran")
-	return ok && (transport == fourCC("hdmi") || transport == fourCC("dprt"))
+	return outputContainsDisplay(device, func(id uint32) (string, []uint32) {
+		t, ok := get(id, "tran")
+		if !ok {
+			return "", nil
+		}
+		if t == fourCC("hdmi") {
+			return "hdmi", nil
+		}
+		if t == fourCC("dprt") {
+			return "dprt", nil
+		}
+		if t != fourCC("grup") {
+			return "", nil
+		}
+		address := audioPropertyAddress{fourCC("agrp"), fourCC("glob"), 0}
+		var size uint32
+		if audioObjectGetPropertyDataSize(id, &address, 0, 0, &size) != 0 || size == 0 || size%4 != 0 || size > 4096 {
+			return "", nil
+		}
+		ids := make([]uint32, size/4)
+		if audioObjectGetPropertyData(id, &address, 0, 0, &size, unsafe.Pointer(&ids[0])) != 0 {
+			return "", nil
+		}
+		return "grup", ids[:size/4]
+	})
 }

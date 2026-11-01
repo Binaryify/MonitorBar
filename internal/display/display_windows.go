@@ -398,3 +398,5 @@ func SleepNow() error {
 	}
 	return nil
 }
+
+func ExternalMonitors() []Monitor { return []Monitor{Target()} }

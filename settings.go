@@ -8,11 +8,15 @@ import (
 
 // settings are the choices kept between launches, in a JSON file.
 type settings struct {
-	SoftBrightness float64 `json:"softBrightness"` // gamma %, 20...100
-	Warmth         float64 `json:"warmth"`         // 0...100
-	Tab            string  `json:"tab"`
-	NetworkHost    string  `json:"networkHost"` // the display found last time
-	LaunchedBefore bool    `json:"launchedBefore"`
+	DeviceNames    map[string]string `json:"deviceNames,omitempty"`
+	SyncVolume     bool              `json:"syncVolume"`
+	SyncPicture    bool              `json:"syncPicture"`
+	SyncResolution bool              `json:"syncResolution"`
+	SoftBrightness float64           `json:"softBrightness"` // gamma %, 20...100
+	Warmth         float64           `json:"warmth"`         // 0...100
+	Tab            string            `json:"tab"`
+	NetworkHost    string            `json:"networkHost"` // the display found last time
+	LaunchedBefore bool              `json:"launchedBefore"`
 
 	// Switching to the day and night scenes at set times.
 	AutoSwitch bool   `json:"autoSwitch"`

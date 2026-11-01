@@ -50,6 +50,9 @@ func sceneByID(id string) scene {
 // fields are read and written on the main thread only: network work runs in
 // goroutines and hands its results back through post.
 type store struct {
+	screens  []display.Monitor
+	peers    []*store
+	parent   *store
 	prefs    *settings
 	tracker  *usage.Tracker
 	redraw   func()                                 // asks the open panel for a new frame
@@ -267,6 +270,15 @@ func (s *store) resetSoftware() {
 func (s *store) applyGamma() {
 	s.dirty = true
 	err := s.setGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100)
+	if s.prefs.SyncPicture {
+		for _, m := range display.ExternalMonitors() {
+			if !m.Same(s.monitor) {
+				if x := m.SetGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100); x != nil {
+					err = x
+				}
+			}
+		}
+	}
 	switch {
 	case errors.Is(err, display.ErrGammaLimited):
 		s.notice = locales.NoticeGammaLimited()
@@ -298,19 +310,37 @@ func (s *store) inputChannel() string {
 // connect finds the display on the LAN: the host found last time first,
 // then a scan.
 func (s *store) connect() {
-	if s.detecting {
+	if s.detecting || s.chasing {
 		return
+	}
+	for _, p := range s.peers {
+		if p.chasing {
+			return
+		}
 	}
 	s.detecting = true
 	cached := s.prefs.NetworkHost
 	go func() {
+		hosts, _ := mitv.DiscoverAll()
+		var peers []*store
 		link := mitv.New(cached)
 		// The host found last time must still be a monitor: addresses move.
 		if cached == "" || !link.IsMonitor() {
 			link = nil
-			if host, err := mitv.Discover(); err == nil {
-				link = mitv.New(host)
+			if len(hosts) > 0 {
+				link = mitv.New(hosts[0])
 			}
+		}
+		for _, host := range hosts {
+			if link != nil && host == link.Host {
+				continue
+			}
+			other := mitv.New(host)
+			v, err := other.Volume()
+			if err != nil {
+				continue
+			}
+			peers = append(peers, &store{link: other, volume: float64(v), deviceVolume: v, hasVolume: true, prefs: s.prefs, redraw: s.redraw, parent: s})
 		}
 		var sources []mitv.Source
 		volume, volumeErr := 0, error(nil)
@@ -324,6 +354,7 @@ func (s *store) connect() {
 		}
 		s.post(func() {
 			s.detecting = false
+			s.peers = peers
 			s.link = link
 			if link == nil {
 				s.inputs, s.hasVolume = nil, s.ddcVolume // DDC/CI may still have volume
@@ -379,6 +410,21 @@ func (s *store) toggleMute() {
 const defaultUnmuted = 20 // the volume unmuting goes to, when it was muted elsewhere
 
 func (s *store) setVolume(percent float64) {
+	root := s
+	if s.parent != nil {
+		root = s.parent
+	}
+	if root.prefs.SyncVolume {
+		root.setLocalVolume(percent)
+		for _, p := range root.peers {
+			p.setLocalVolume(percent)
+		}
+		return
+	}
+	s.setLocalVolume(percent)
+}
+func (s *store) setLocalVolume(percent float64) {
+	percent = min(max(percent, 0), 100)
 	if percent > 0 {
 		s.unmuted = 0
 	}
@@ -779,6 +825,37 @@ func (s *store) installUpdate() {
 // MARK: Display modes
 
 func (s *store) applyMode(m display.Mode) {
+	if s.prefs.SyncResolution {
+		type change struct {
+			monitor display.Monitor
+			mode    display.Mode
+		}
+		var changes []change
+		for _, other := range display.ExternalMonitors() {
+			if other.Same(s.monitor) {
+				continue
+			}
+			found := false
+			for _, candidate := range other.Modes() {
+				if candidate.ID() == m.ID() {
+					changes = append(changes, change{other, candidate})
+					found = true
+					break
+				}
+			}
+			if !found {
+				s.notice = locales.SyncModeUnsupported()
+				return
+			}
+		}
+		for _, c := range changes {
+			if err := c.monitor.Apply(c.mode); err != nil {
+				s.notice = locales.SyncModeFailed()
+				return
+			}
+		}
+	}
+
 	if err := s.monitor.Apply(m); err != nil {
 		s.notice = locales.NoticeModeRejected()
 	} else {
@@ -825,7 +902,17 @@ func (s *store) sleepDisplay() { _ = display.SleepNow() }
 
 func (s *store) refreshDisplay() {
 	_, s.hasBuiltin = display.BuiltinBrightness()
-	s.monitor = display.Target()
+	s.screens = display.ExternalMonitors()
+	found := false
+	for _, m := range s.screens {
+		if m.Same(s.monitor) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		s.monitor = display.Target()
+	}
 	s.modes = s.monitor.Modes()
 	s.current, s.hasCurrent = s.monitor.CurrentMode()
 }
@@ -850,6 +937,9 @@ func (s *store) panelOpened() {
 		s.connect()
 	} else {
 		s.readVolume()
+		for _, peer := range s.peers {
+			peer.readVolume()
+		}
 	}
 	s.refreshDDC()
 }

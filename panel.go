@@ -25,6 +25,7 @@ var tabs = []tab{
 	{"picture", locales.TabPicture, "sliders"},
 	{"modes", locales.TabModes, "aspect"},
 	{"activity", locales.TabActivity, "chart"},
+	{"dual", locales.TabSync, "layers"},
 }
 
 const arrowHeight = 10
@@ -214,6 +215,8 @@ func (p *panel) content(c *ui.Context) {
 				sectionTitle(c, t.label())
 			}
 			switch t.id {
+			case "dual":
+				p.dualControls(c)
 			case "picture":
 				p.picture(c)
 			case "modes":
