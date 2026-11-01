@@ -313,5 +313,11 @@
   "dualNote": "Enabling copies current settings. Inputs stay independent.",
   "deviceName": "Device name",
   "syncModeUnsupported": "Another display does not support this mode; nothing changed.",
-  "syncModeFailed": "Resolution sync failed. Check the current display modes."
+  "syncModeFailed": "Resolution sync failed. Check the current display modes.",
+  "lanOffline": "Offline or unresponsive — commands paused",
+  "lanOnline": "Connected",
+  "lanAddress": "Device IP address",
+  "lanReplace": "Update address and reconnect",
+  "lanAddressInvalid": "Enter a unique IP address and wait for pending operations.",
+  "audioBinding": "Audio output UID (choose an active output below)"
 }

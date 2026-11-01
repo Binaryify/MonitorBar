@@ -8,6 +8,8 @@ import (
 
 // settings are the choices kept between launches, in a JSON file.
 type settings struct {
+	KnownHosts     []string          `json:"knownHosts,omitempty"`
+	AudioBindings  map[string]string `json:"audioBindings,omitempty"`
 	DeviceNames    map[string]string `json:"deviceNames,omitempty"`
 	SyncVolume     bool              `json:"syncVolume"`
 	SyncPicture    bool              `json:"syncPicture"`

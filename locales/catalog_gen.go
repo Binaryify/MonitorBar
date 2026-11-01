@@ -1348,3 +1348,63 @@ func SyncModeFailed() string { return In(i18n.Locale()).SyncModeFailed() }
 func (msgs Messages) SyncModeFailed() string {
 	return Catalog.Format(msgs.locale, "syncModeFailed", nil)
 }
+
+// LanOffline says "Offline or unresponsive — commands paused"
+// in the language the app shows.
+func LanOffline() string { return In(i18n.Locale()).LanOffline() }
+
+// LanOffline says "Offline or unresponsive — commands paused"
+// in the language of msgs.
+func (msgs Messages) LanOffline() string {
+	return Catalog.Format(msgs.locale, "lanOffline", nil)
+}
+
+// LanOnline says "Connected"
+// in the language the app shows.
+func LanOnline() string { return In(i18n.Locale()).LanOnline() }
+
+// LanOnline says "Connected"
+// in the language of msgs.
+func (msgs Messages) LanOnline() string {
+	return Catalog.Format(msgs.locale, "lanOnline", nil)
+}
+
+// LanAddress says "Device IP address"
+// in the language the app shows.
+func LanAddress() string { return In(i18n.Locale()).LanAddress() }
+
+// LanAddress says "Device IP address"
+// in the language of msgs.
+func (msgs Messages) LanAddress() string {
+	return Catalog.Format(msgs.locale, "lanAddress", nil)
+}
+
+// LanReplace says "Update address and reconnect"
+// in the language the app shows.
+func LanReplace() string { return In(i18n.Locale()).LanReplace() }
+
+// LanReplace says "Update address and reconnect"
+// in the language of msgs.
+func (msgs Messages) LanReplace() string {
+	return Catalog.Format(msgs.locale, "lanReplace", nil)
+}
+
+// LanAddressInvalid says "Enter a unique IP address and wait for pending operations."
+// in the language the app shows.
+func LanAddressInvalid() string { return In(i18n.Locale()).LanAddressInvalid() }
+
+// LanAddressInvalid says "Enter a unique IP address and wait for pending operations."
+// in the language of msgs.
+func (msgs Messages) LanAddressInvalid() string {
+	return Catalog.Format(msgs.locale, "lanAddressInvalid", nil)
+}
+
+// AudioBinding says "Audio output UID (choose an active output below)"
+// in the language the app shows.
+func AudioBinding() string { return In(i18n.Locale()).AudioBinding() }
+
+// AudioBinding says "Audio output UID (choose an active output below)"
+// in the language of msgs.
+func (msgs Messages) AudioBinding() string {
+	return Catalog.Format(msgs.locale, "audioBinding", nil)
+}

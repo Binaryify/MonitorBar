@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/egoist/mygo"
+	"slices"
 
 	"github.com/binaryify/MonitorBar/internal/mediakeys"
 )
@@ -22,19 +23,38 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		// A MacBook's own display keeps its keys: both change together.
 		return func() { s.stepBrightness(delta); s.adjusted(hudBrightness) }, s.hasBuiltin
 	case mediakeys.VolumeUp, mediakeys.VolumeDown:
-		if !s.hasVolume || !s.soundToDisplay() {
+		if len(s.audioKeyTargets()) == 0 {
 			return nil, false // the sound plays elsewhere, at macOS's volume
 		}
 		delta := float64(shortcutStep)
 		if k == mediakeys.VolumeDown {
 			delta = -delta
 		}
-		return func() { s.stepVolume(delta); s.adjusted(hudVolume) }, false
+		return func() {
+			for _, device := range s.audioKeyTargets() {
+				device.setLocalVolume(min(max(device.volume+delta, 0), 100))
+			}
+			s.adjusted(hudVolume)
+		}, false
 	case mediakeys.Mute:
-		if !s.hasVolume || !s.soundToDisplay() {
+		if len(s.audioKeyTargets()) == 0 {
 			return nil, false
 		}
-		return func() { s.toggleMute(); s.adjusted(hudVolume) }, false
+		return func() {
+			for _, device := range s.audioKeyTargets() {
+				if device.volume > 0 {
+					device.unmuted = device.volume
+					device.setLocalVolume(0)
+				} else {
+					v := device.unmuted
+					if v == 0 {
+						v = defaultUnmuted
+					}
+					device.setLocalVolume(v)
+				}
+			}
+			s.adjusted(hudVolume)
+		}, false
 	}
 	return nil, false
 }
@@ -82,3 +102,36 @@ func (s *store) setMediaKeys(on bool) {
 
 // openAccessibility opens the Accessibility list in System Settings.
 func openAccessibility() { _ = mygo.Shell.OpenExternal(mediakeys.SettingsURL) }
+
+// Explicit bindings take precedence over group synchronization: only currently
+// active audio outputs receive keyboard commands, never unrelated LAN devices.
+func (s *store) audioKeyTargets() []*store {
+	if !s.soundToDisplay() {
+		return nil
+	}
+	devices := append([]*store{s}, s.peers...)
+	var out []*store
+	if len(s.prefs.AudioBindings) == 0 {
+		if s.hasVolume && !s.offline {
+			out = append(out, s)
+		}
+		if s.prefs.SyncVolume {
+			for _, p := range s.peers {
+				if p.hasVolume && !p.offline {
+					out = append(out, p)
+				}
+			}
+		}
+		return out
+	}
+	if s.activeAudioUIDs == nil {
+		return nil
+	}
+	uids := s.activeAudioUIDs()
+	for _, d := range devices {
+		if d.link != nil && d.hasVolume && !d.offline && slices.Contains(uids, s.prefs.AudioBindings[d.link.Host]) {
+			out = append(out, d)
+		}
+	}
+	return out
+}

@@ -99,6 +99,7 @@ func (a *app) ready(show bool) {
 	go func() { // the built-in display's brightness, for following it, and the media keys' permission
 		for range time.Tick(time.Second) {
 			mygo.RunOnMain(func() {
+				a.s.networkPoll()
 				denied := a.s.mediaKeysDenied
 				if a.s.syncMediaKeys(); denied != a.s.mediaKeysDenied {
 					a.s.redraw()

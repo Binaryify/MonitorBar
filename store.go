@@ -50,13 +50,19 @@ func sceneByID(id string) scene {
 // fields are read and written on the main thread only: network work runs in
 // goroutines and hands its results back through post.
 type store struct {
-	screens  []display.Monitor
-	peers    []*store
-	parent   *store
-	prefs    *settings
-	tracker  *usage.Tracker
-	redraw   func()                                 // asks the open panel for a new frame
-	setGamma func(brightness, warmth float64) error // the monitor's, replaced in tests
+	activeAudioUIDs func() []string
+	readingVolume   bool
+	volumeRevision  uint64
+	networkTick     int
+	hostEdit        string
+	offline         bool
+	screens         []display.Monitor
+	peers           []*store
+	parent          *store
+	prefs           *settings
+	tracker         *usage.Tracker
+	redraw          func()                                 // asks the open panel for a new frame
+	setGamma        func(brightness, warmth float64) error // the monitor's, replaced in tests
 
 	monitor     display.Monitor
 	modes       []display.Mode
@@ -143,17 +149,18 @@ var controlCatalog = []struct {
 
 func newStore() *store {
 	s := &store{
-		prefs:          loadSettings(),
-		tracker:        usage.Open(filepath.Join(dataDir(), "usage.json")),
-		redraw:         func() {},
-		now:            time.Now,
-		launchAtLogin:  mygo.App.OpenAtLogin(),
-		canUpdate:      mygo.Updater.Enabled(),
-		lastBuiltin:    -1,
-		registered:     map[string]string{},
-		soundToDisplay: display.SoundToDisplay,
-		keyHeld:        keystate.Held,
-		onAdjust:       func(hudKind) {},
+		prefs:           loadSettings(),
+		tracker:         usage.Open(filepath.Join(dataDir(), "usage.json")),
+		redraw:          func() {},
+		now:             time.Now,
+		launchAtLogin:   mygo.App.OpenAtLogin(),
+		canUpdate:       mygo.Updater.Enabled(),
+		lastBuiltin:     -1,
+		registered:      map[string]string{},
+		soundToDisplay:  display.SoundToDisplay,
+		activeAudioUIDs: display.ActiveDisplayAudioUIDs,
+		keyHeld:         keystate.Held,
+		onAdjust:        func(hudKind) {},
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
@@ -320,8 +327,14 @@ func (s *store) connect() {
 	}
 	s.detecting = true
 	cached := s.prefs.NetworkHost
+	known := slices.Clone(s.prefs.KnownHosts)
 	go func() {
 		hosts, _ := mitv.DiscoverAll()
+		for _, h := range known {
+			if !slices.Contains(hosts, h) {
+				hosts = append(hosts, h)
+			}
+		}
 		var peers []*store
 		link := mitv.New(cached)
 		// The host found last time must still be a monitor: addresses move.
@@ -337,10 +350,10 @@ func (s *store) connect() {
 			}
 			other := mitv.New(host)
 			v, err := other.Volume()
-			if err != nil {
+			if err != nil && !slices.Contains(known, host) {
 				continue
 			}
-			peers = append(peers, &store{link: other, volume: float64(v), deviceVolume: v, hasVolume: true, prefs: s.prefs, redraw: s.redraw, parent: s})
+			peers = append(peers, &store{offline: err != nil, link: other, volume: float64(v), deviceVolume: v, hasVolume: true, prefs: s.prefs, redraw: s.redraw, parent: s})
 		}
 		var sources []mitv.Source
 		volume, volumeErr := 0, error(nil)
@@ -355,6 +368,8 @@ func (s *store) connect() {
 		s.post(func() {
 			s.detecting = false
 			s.peers = peers
+			s.prefs.KnownHosts = slices.Clone(hosts)
+			s.dirty = true
 			s.link = link
 			if link == nil {
 				s.inputs, s.hasVolume = nil, s.ddcVolume // DDC/CI may still have volume
@@ -424,6 +439,10 @@ func (s *store) setVolume(percent float64) {
 	s.setLocalVolume(percent)
 }
 func (s *store) setLocalVolume(percent float64) {
+	if s.offline {
+		return
+	}
+	s.volumeRevision++
 	percent = min(max(percent, 0), 100)
 	if percent > 0 {
 		s.unmuted = 0
@@ -439,56 +458,75 @@ func (s *store) setLocalVolume(percent float64) {
 
 // chaseVolume steps toward the latest target: the API only has ±1 keys.
 func (s *store) chaseVolume() {
-	if s.link == nil || s.chasing {
+	if s.link == nil || s.chasing || s.offline {
 		return
 	}
 	s.chasing = true
-	link, actual := s.link, s.deviceVolume
+	link := s.link
 	go func() {
-		failed := false
-		for target := int(s.volumeTarget.Load()); target != actual; target = int(s.volumeTarget.Load()) {
-			key, step := "volumeup", 1
-			if target < actual {
-				key, step = "volumedown", -1
-			}
-			if link.Press(key) != nil {
-				failed = true
-				break
-			}
-			actual += step
-		}
+		actual, err := link.ChaseVolume(func() int { return int(s.volumeTarget.Load()) })
 		s.post(func() {
+			if s.link != link {
+				return
+			}
 			s.chasing = false
+			if err != nil {
+				s.offline = true
+				s.notice = locales.LanOffline()
+				s.volumeTarget.Store(int64(actual))
+				s.volume = float64(actual)
+				return
+			}
 			s.deviceVolume = actual
-			switch {
-			case failed:
-				s.notice = locales.NoticeVolumeFailed()
-			case int(s.volumeTarget.Load()) != actual:
-				s.chaseVolume() // the slider moved while the last step was sent
-			default:
-				s.readVolume()
+			if int(s.volumeTarget.Load()) != actual {
+				s.chaseVolume()
+			} else {
+				s.volume = float64(actual)
+				s.notice = ""
 			}
 		})
 	}()
 }
 
 func (s *store) readVolume() {
-	link := s.link
-	if link == nil {
+	if s.link == nil || s.readingVolume || s.chasing {
 		return
 	}
+	s.readingVolume = true
+	link, revision := s.link, s.volumeRevision
 	go func() {
 		v, err := link.Volume()
-		if err != nil {
-			return
-		}
 		s.post(func() {
-			s.deviceVolume, s.hasVolume = v, true
-			if !s.chasing {
-				s.volume = float64(v)
+			s.readingVolume = false
+			if s.link != link || s.volumeRevision != revision || s.chasing {
+				return
 			}
+			s.offline = err != nil
+			if err != nil {
+				s.notice = locales.LanOffline()
+				return
+			}
+			s.deviceVolume, s.volume, s.hasVolume = v, float64(v), true
+			s.volumeTarget.Store(int64(v))
+			s.notice = ""
 		})
 	}()
+}
+
+// networkPoll reads external remote changes and retries offline devices without
+// replaying commands. Scans are only needed when no LAN device has been found.
+func (s *store) networkPoll() {
+	s.networkTick++
+	if s.networkTick%5 != 0 {
+		return
+	}
+	s.readVolume()
+	for _, peer := range s.peers {
+		peer.readVolume()
+	}
+	if s.link == nil && s.networkTick%30 == 0 {
+		s.connect()
+	}
 }
 
 // MARK: DDC/CI
@@ -920,6 +958,10 @@ func (s *store) refreshDisplay() {
 // displaysChanged follows plugging, mode changes and wake: the gamma table
 // was reset, so capture it again and reapply.
 func (s *store) displaysChanged() {
+	s.readVolume()
+	for _, peer := range s.peers {
+		peer.readVolume()
+	}
 	previous := s.monitor
 	s.refreshDisplay()
 	display.ResetGammaBase()

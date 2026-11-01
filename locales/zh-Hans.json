@@ -129,5 +129,11 @@
   "dualNote": "开启后对齐当前设置，输入源保持独立。",
   "deviceName": "设备名称",
   "syncModeUnsupported": "另一台不支持此分辨率或刷新率，未更改。",
-  "syncModeFailed": "分辨率同步失败，请检查各屏幕当前模式。"
+  "syncModeFailed": "分辨率同步失败，请检查各屏幕当前模式。",
+  "lanOffline": "离线或无响应，已暂停控制",
+  "lanOnline": "已连接",
+  "lanAddress": "设备 IP 地址",
+  "lanReplace": "更新地址并重连",
+  "lanAddressInvalid": "请输入未使用的有效 IP 地址，并等待当前操作完成。",
+  "audioBinding": "音频输出唯一标识（可选择下方当前输出）"
 }
