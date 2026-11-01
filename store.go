@@ -50,6 +50,7 @@ func sceneByID(id string) scene {
 // fields are read and written on the main thread only: network work runs in
 // goroutines and hands its results back through post.
 type store struct {
+	presetName      string
 	activeAudioUIDs func() []string
 	readingVolume   bool
 	volumeRevision  uint64
@@ -276,10 +277,17 @@ func (s *store) resetSoftware() {
 
 func (s *store) applyGamma() {
 	s.dirty = true
+	if s.prefs.Pictures == nil {
+		s.prefs.Pictures = map[string]pictureState{}
+	}
+	if s.monitor.Name != "" && s.bindShortcuts {
+		s.prefs.Pictures[s.monitor.Key()] = pictureState{s.prefs.SoftBrightness, s.prefs.Warmth}
+	}
 	err := s.setGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100)
 	if s.prefs.SyncPicture {
 		for _, m := range display.ExternalMonitors() {
-			if !m.Same(s.monitor) {
+			if !m.Same(s.monitor) && !s.prefs.ExcludedScreens[m.Key()] {
+				s.prefs.Pictures[m.Key()] = pictureState{s.prefs.SoftBrightness, s.prefs.Warmth}
 				if x := m.SetGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100); x != nil {
 					err = x
 				}
@@ -414,12 +422,28 @@ func (s *store) toggleMute() {
 	if !s.hasVolume {
 		return
 	}
-	if s.volume > 0 {
-		s.unmuted = s.volume
-		s.setVolume(0)
-		return
+	root := s
+	if s.parent != nil {
+		root = s.parent
 	}
-	s.setVolume(cmp.Or(s.unmuted, defaultUnmuted))
+	targets := []*store{s}
+	if root.prefs.SyncVolume && !root.excludedAudio(s) {
+		targets = nil
+		for _, d := range append([]*store{root}, root.peers...) {
+			if !root.excludedAudio(d) {
+				targets = append(targets, d)
+			}
+		}
+	}
+	mute := s.volume > 0
+	for _, d := range targets {
+		if mute {
+			d.unmuted = d.volume
+			d.setLocalVolume(0)
+		} else {
+			d.setLocalVolume(cmp.Or(d.unmuted, float64(defaultUnmuted)))
+		}
+	}
 }
 
 const defaultUnmuted = 20 // the volume unmuting goes to, when it was muted elsewhere
@@ -429,10 +453,17 @@ func (s *store) setVolume(percent float64) {
 	if s.parent != nil {
 		root = s.parent
 	}
-	if root.prefs.SyncVolume {
-		root.setLocalVolume(percent)
-		for _, p := range root.peers {
-			p.setLocalVolume(percent)
+	if root.prefs.SyncVolume && !root.excludedAudio(s) {
+		delta := percent - s.volume
+		for _, d := range append([]*store{root}, root.peers...) {
+			if root.excludedAudio(d) {
+				continue
+			}
+			target := percent
+			if root.prefs.SyncDelta {
+				target = d.volume + delta
+			}
+			d.setLocalVolume(target)
 		}
 		return
 	}
@@ -870,7 +901,7 @@ func (s *store) applyMode(m display.Mode) {
 		}
 		var changes []change
 		for _, other := range display.ExternalMonitors() {
-			if other.Same(s.monitor) {
+			if other.Same(s.monitor) || s.prefs.ExcludedScreens[other.Key()] {
 				continue
 			}
 			found := false

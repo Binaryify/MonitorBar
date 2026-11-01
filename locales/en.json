@@ -319,5 +319,11 @@
   "lanAddress": "Device IP address",
   "lanReplace": "Update address and reconnect",
   "lanAddressInvalid": "Enter a unique IP address and wait for pending operations.",
-  "audioBinding": "Audio output UID (choose an active output below)"
+  "audioBinding": "Audio output UID (choose an active output below)",
+  "syncDelta": "Keep volume differences",
+  "syncMember": "Include in synchronization",
+  "presetName": "Scene name",
+  "presetSave": "Save / replace scene",
+  "bindScreen": "Bind to screen",
+  "presetDelete": "Delete"
 }

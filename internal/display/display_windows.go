@@ -400,3 +400,5 @@ func SleepNow() error {
 }
 
 func ExternalMonitors() []Monitor { return []Monitor{Target()} }
+
+func (m Monitor) Key() string { return m.handle }

@@ -4,6 +4,7 @@ package display
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"sync"
 	"unsafe"
@@ -342,4 +343,15 @@ func ExternalMonitors() []Monitor {
 		}
 	}
 	return out
+}
+
+// Key uses the EDID identity where a unique serial is available. For panels
+// without serial numbers, the system display ID distinguishes active screens.
+func (m Monitor) Key() string {
+	load()
+	serial := cgDisplaySerialNumber(m.handle)
+	if serial == 0 {
+		return fmt.Sprintf("display-id:%d", m.handle)
+	}
+	return fmt.Sprintf("%d:%d:%d", cgDisplayVendorNumber(m.handle), cgDisplayModelNumber(m.handle), serial)
 }

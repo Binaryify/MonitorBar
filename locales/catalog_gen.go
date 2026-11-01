@@ -1408,3 +1408,63 @@ func AudioBinding() string { return In(i18n.Locale()).AudioBinding() }
 func (msgs Messages) AudioBinding() string {
 	return Catalog.Format(msgs.locale, "audioBinding", nil)
 }
+
+// SyncDelta says "Keep volume differences"
+// in the language the app shows.
+func SyncDelta() string { return In(i18n.Locale()).SyncDelta() }
+
+// SyncDelta says "Keep volume differences"
+// in the language of msgs.
+func (msgs Messages) SyncDelta() string {
+	return Catalog.Format(msgs.locale, "syncDelta", nil)
+}
+
+// SyncMember says "Include in synchronization"
+// in the language the app shows.
+func SyncMember() string { return In(i18n.Locale()).SyncMember() }
+
+// SyncMember says "Include in synchronization"
+// in the language of msgs.
+func (msgs Messages) SyncMember() string {
+	return Catalog.Format(msgs.locale, "syncMember", nil)
+}
+
+// PresetName says "Scene name"
+// in the language the app shows.
+func PresetName() string { return In(i18n.Locale()).PresetName() }
+
+// PresetName says "Scene name"
+// in the language of msgs.
+func (msgs Messages) PresetName() string {
+	return Catalog.Format(msgs.locale, "presetName", nil)
+}
+
+// PresetSave says "Save / replace scene"
+// in the language the app shows.
+func PresetSave() string { return In(i18n.Locale()).PresetSave() }
+
+// PresetSave says "Save / replace scene"
+// in the language of msgs.
+func (msgs Messages) PresetSave() string {
+	return Catalog.Format(msgs.locale, "presetSave", nil)
+}
+
+// BindScreen says "Bind to screen"
+// in the language the app shows.
+func BindScreen() string { return In(i18n.Locale()).BindScreen() }
+
+// BindScreen says "Bind to screen"
+// in the language of msgs.
+func (msgs Messages) BindScreen() string {
+	return Catalog.Format(msgs.locale, "bindScreen", nil)
+}
+
+// PresetDelete says "Delete"
+// in the language the app shows.
+func PresetDelete() string { return In(i18n.Locale()).PresetDelete() }
+
+// PresetDelete says "Delete"
+// in the language of msgs.
+func (msgs Messages) PresetDelete() string {
+	return Catalog.Format(msgs.locale, "presetDelete", nil)
+}

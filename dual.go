@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/binaryify/MonitorBar/internal/display"
+
 	"github.com/binaryify/MonitorBar/internal/mitv"
 	"net"
 
@@ -15,14 +15,34 @@ func (p *panel) dualControls(c *ui.Context) {
 	card(c, func() {
 		ui.Text(c, locales.DualTitle()).FontSize(12).FontWeight(600)
 		for i, m := range s.screens {
-			if chipText(c.Key(fmt.Sprint("screen", i)), fmt.Sprintf("%d · %s", i+1, m.Name), s.monitor.Same(m)) {
+			if chipText(c.Key(fmt.Sprint("screen", i)), s.screenLabel(i, m.Key(), m.Name), s.monitor.Same(m)) {
 				s.monitor = m
+				if picture, ok := s.prefs.Pictures[m.Key()]; ok {
+					s.prefs.SoftBrightness, s.prefs.Warmth = picture.Brightness, picture.Warmth
+				}
 				s.modes = m.Modes()
 				s.current, s.hasCurrent = m.CurrentMode()
 				s.probeDDC()
 			}
 		}
 		ui.Text(c, locales.DualHint()).FontSize(10)
+		if ui.Switch(c.Key("delta"), &s.prefs.SyncDelta).Label(locales.SyncDelta()).Changed() {
+			s.dirty = true
+			s.save()
+		}
+		for i, m := range s.screens {
+			include := !s.prefs.ExcludedScreens[m.Key()]
+			if ui.Switch(c.Key(fmt.Sprint("include-screen", i)), &include).Label(fmt.Sprintf("%s %d", locales.SyncMember(), i+1)).Changed() {
+				if s.prefs.ExcludedScreens == nil {
+					s.prefs.ExcludedScreens = map[string]bool{}
+				}
+				s.prefs.ExcludedScreens[m.Key()] = !include
+				s.dirty = true
+				s.save()
+			}
+		}
+		p.presetControls(c)
+
 		for _, o := range []struct {
 			label string
 			value *bool
@@ -57,7 +77,29 @@ func (p *panel) dualControls(c *ui.Context) {
 				continue
 			}
 			host := device.link.Host
+			include := !s.prefs.ExcludedAudio[host]
+			if ui.Switch(c.Key("include-audio"+host), &include).Label(locales.SyncMember()).Changed() {
+				if s.prefs.ExcludedAudio == nil {
+					s.prefs.ExcludedAudio = map[string]bool{}
+				}
+				s.prefs.ExcludedAudio[host] = !include
+				s.dirty = true
+				s.save()
+			}
+
 			name := s.prefs.DeviceNames[host]
+			for i, m := range s.screens {
+				key := m.Key()
+				if chipText(c.Key(fmt.Sprintf("bind-%s-%d", host, i)), fmt.Sprintf("%s %d", locales.BindScreen(), i+1), s.prefs.ScreenBindings[host] == key) {
+					if s.prefs.ScreenBindings == nil {
+						s.prefs.ScreenBindings = map[string]string{}
+					}
+					s.prefs.ScreenBindings[host] = key
+					s.dirty = true
+					s.save()
+				}
+			}
+
 			uid := s.prefs.AudioBindings[host]
 			if ui.TextInput(c.Key("audio-"+host), &uid).Label(locales.AudioBinding()).Changed() {
 				if s.prefs.AudioBindings == nil {
@@ -71,7 +113,11 @@ func (p *panel) dualControls(c *ui.Context) {
 				s.dirty = true
 				s.save()
 			}
-			for _, output := range display.ActiveDisplayAudioUIDs() {
+			var outputs []string
+			if s.activeAudioUIDs != nil {
+				outputs = s.activeAudioUIDs()
+			}
+			for _, output := range outputs {
 				if chipText(c.Key(host+output), output, uid == output) {
 					if s.prefs.AudioBindings == nil {
 						s.prefs.AudioBindings = map[string]string{}

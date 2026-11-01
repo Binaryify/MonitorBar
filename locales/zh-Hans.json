@@ -135,5 +135,11 @@
   "lanAddress": "设备 IP 地址",
   "lanReplace": "更新地址并重连",
   "lanAddressInvalid": "请输入未使用的有效 IP 地址，并等待当前操作完成。",
-  "audioBinding": "音频输出唯一标识（可选择下方当前输出）"
+  "audioBinding": "音频输出唯一标识（可选择下方当前输出）",
+  "syncDelta": "保留音量差值",
+  "syncMember": "参与同步",
+  "presetName": "场景名称",
+  "presetSave": "保存或更新场景",
+  "bindScreen": "绑定屏幕",
+  "presetDelete": "删除"
 }

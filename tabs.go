@@ -124,8 +124,9 @@ func (p *panel) volume(c *ui.Context) {
 			ui.Text(c, title).FontSize(12).FontWeight(600).Grow(1)
 			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
-		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label(locales.Volume()).Changed() {
-			s.setVolume(s.volume)
+		v := s.volume
+		if ui.Slider(c.Key("volume"), &v, 0, 100).Label(locales.Volume()).Changed() {
+			s.setVolume(v)
 		}
 	})
 }
