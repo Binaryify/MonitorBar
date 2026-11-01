@@ -119,6 +119,7 @@ func (s *store) applyPreset(name string) {
 }
 func (p *panel) presetControls(c *ui.Context) {
 	s := p.s
+	ui.Text(c, locales.PresetName()).FontSize(11)
 	ui.TextInput(c.Key("preset-name"), &s.presetName).Label(locales.PresetName())
 	if chipText(c.Key("save-preset"), locales.PresetSave(), false) {
 		s.savePreset(s.presetName)

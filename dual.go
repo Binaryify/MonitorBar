@@ -26,13 +26,13 @@ func (p *panel) dualControls(c *ui.Context) {
 			}
 		}
 		ui.Text(c, locales.DualHint()).FontSize(10)
-		if ui.Switch(c.Key("delta"), &s.prefs.SyncDelta).Label(locales.SyncDelta()).Changed() {
+		if labeledSwitch(c.Key("delta"), locales.SyncDelta(), &s.prefs.SyncDelta) {
 			s.dirty = true
 			s.save()
 		}
 		for i, m := range s.screens {
 			include := !s.prefs.ExcludedScreens[m.Key()]
-			if ui.Switch(c.Key(fmt.Sprint("include-screen", i)), &include).Label(fmt.Sprintf("%s %d", locales.SyncMember(), i+1)).Changed() {
+			if labeledSwitch(c.Key(fmt.Sprint("include-screen", i)), fmt.Sprintf("%s %d", locales.SyncMember(), i+1), &include) {
 				if s.prefs.ExcludedScreens == nil {
 					s.prefs.ExcludedScreens = map[string]bool{}
 				}
@@ -41,7 +41,12 @@ func (p *panel) dualControls(c *ui.Context) {
 				s.save()
 			}
 		}
-		p.presetControls(c)
+		if chipText(c.Key("presets-toggle"), locales.PresetList(), p.showPresets) {
+			p.showPresets = !p.showPresets
+		}
+		if p.showPresets {
+			p.presetControls(c)
+		}
 
 		for _, o := range []struct {
 			label string
@@ -77,8 +82,38 @@ func (p *panel) dualControls(c *ui.Context) {
 				continue
 			}
 			host := device.link.Host
+			name := s.prefs.DeviceNames[host]
+			title := name
+			if title == "" {
+				title = host
+			}
+			if chipText(c.Key("device-toggle-"+host), title, p.expandedDevice == host) {
+				if p.expandedDevice == host {
+					p.expandedDevice = ""
+				} else {
+					p.expandedDevice = host
+				}
+			}
+			status := locales.LanOnline()
+			if device.offline {
+				status = locales.LanOffline()
+			}
+			ui.Text(c, host+" · "+status).FontSize(10).TextColor(muted)
+			if p.expandedDevice != host {
+				continue
+			}
+			ui.Text(c, locales.DeviceName()).FontSize(11)
+			if ui.TextInput(c.Key("name-"+host), &name).Label(locales.DeviceName()).Changed() {
+				if s.prefs.DeviceNames == nil {
+					s.prefs.DeviceNames = map[string]string{}
+				}
+				s.prefs.DeviceNames[host] = name
+				s.dirty = true
+				s.save()
+			}
+
 			include := !s.prefs.ExcludedAudio[host]
-			if ui.Switch(c.Key("include-audio"+host), &include).Label(locales.SyncMember()).Changed() {
+			if labeledSwitch(c.Key("include-audio"+host), locales.SyncMember(), &include) {
 				if s.prefs.ExcludedAudio == nil {
 					s.prefs.ExcludedAudio = map[string]bool{}
 				}
@@ -87,7 +122,6 @@ func (p *panel) dualControls(c *ui.Context) {
 				s.save()
 			}
 
-			name := s.prefs.DeviceNames[host]
 			for i, m := range s.screens {
 				key := m.Key()
 				if chipText(c.Key(fmt.Sprintf("bind-%s-%d", host, i)), fmt.Sprintf("%s %d", locales.BindScreen(), i+1), s.prefs.ScreenBindings[host] == key) {
@@ -100,6 +134,7 @@ func (p *panel) dualControls(c *ui.Context) {
 				}
 			}
 
+			ui.Text(c, locales.AudioBinding()).FontSize(11)
 			uid := s.prefs.AudioBindings[host]
 			if ui.TextInput(c.Key("audio-"+host), &uid).Label(locales.AudioBinding()).Changed() {
 				if s.prefs.AudioBindings == nil {
@@ -117,8 +152,8 @@ func (p *panel) dualControls(c *ui.Context) {
 			if s.activeAudioUIDs != nil {
 				outputs = s.activeAudioUIDs()
 			}
-			for _, output := range outputs {
-				if chipText(c.Key(host+output), output, uid == output) {
+			for i, output := range outputs {
+				if chipText(c.Key(host+output), fmt.Sprintf("%s %d", locales.AudioOutput(), i+1), uid == output) {
 					if s.prefs.AudioBindings == nil {
 						s.prefs.AudioBindings = map[string]string{}
 					}
@@ -128,14 +163,10 @@ func (p *panel) dualControls(c *ui.Context) {
 				}
 			}
 
-			status := locales.LanOnline()
-			if device.offline {
-				status = locales.LanOffline()
-			}
-			ui.Text(c, status).FontSize(10)
 			if device.hostEdit == "" {
 				device.hostEdit = host
 			}
+			ui.Text(c, locales.LanAddress()).FontSize(11)
 			ui.TextInput(c.Key("host-"+host), &device.hostEdit).Label(locales.LanAddress())
 			if chipText(c.Key("replace-"+host), locales.LanReplace(), false) {
 				address := device.hostEdit
@@ -173,15 +204,6 @@ func (p *panel) dualControls(c *ui.Context) {
 				}
 			}
 
-			ui.Text(c, host).FontSize(10)
-			if ui.TextInput(c.Key("name-"+host), &name).Label(locales.DeviceName()).Changed() {
-				if s.prefs.DeviceNames == nil {
-					s.prefs.DeviceNames = map[string]string{}
-				}
-				s.prefs.DeviceNames[host] = name
-				s.dirty = true
-				s.save()
-			}
 		}
 		p.mediaKeys(c)
 		for _, peer := range s.peers {
@@ -191,4 +213,14 @@ func (p *panel) dualControls(c *ui.Context) {
 		}
 		ui.Text(c, locales.DualNote()).FontSize(10)
 	})
+}
+
+// Label() is accessibility metadata, so switches also need visible text.
+func labeledSwitch(c *ui.Context, label string, value *bool) bool {
+	changed := false
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, label).FontSize(11).Grow(1).MinWidth(0)
+		changed = ui.Switch(c.Key("switch"), value).Label(label).Changed()
+	})
+	return changed
 }

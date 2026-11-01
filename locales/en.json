@@ -325,5 +325,7 @@
   "presetName": "Scene name",
   "presetSave": "Save / replace scene",
   "bindScreen": "Bind to screen",
-  "presetDelete": "Delete"
+  "presetDelete": "Delete",
+  "audioOutput": "Audio output",
+  "presetList": "Saved scenes"
 }

@@ -32,7 +32,9 @@ const arrowHeight = 10
 
 // panel draws the store and reports the height it wants.
 type panel struct {
-	s *store
+	expandedDevice string
+	showPresets    bool
+	s              *store
 	// arrowX is where the arrow points, from the panel's left edge (macOS).
 	arrowX float32
 	// maxContent caps the scrolling area, so the panel fits the screen.

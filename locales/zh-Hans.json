@@ -141,5 +141,7 @@
   "presetName": "场景名称",
   "presetSave": "保存或更新场景",
   "bindScreen": "绑定屏幕",
-  "presetDelete": "删除"
+  "presetDelete": "删除",
+  "audioOutput": "音频输出",
+  "presetList": "自定义场景"
 }

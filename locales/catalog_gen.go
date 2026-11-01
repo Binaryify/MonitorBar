@@ -1468,3 +1468,23 @@ func PresetDelete() string { return In(i18n.Locale()).PresetDelete() }
 func (msgs Messages) PresetDelete() string {
 	return Catalog.Format(msgs.locale, "presetDelete", nil)
 }
+
+// AudioOutput says "Audio output"
+// in the language the app shows.
+func AudioOutput() string { return In(i18n.Locale()).AudioOutput() }
+
+// AudioOutput says "Audio output"
+// in the language of msgs.
+func (msgs Messages) AudioOutput() string {
+	return Catalog.Format(msgs.locale, "audioOutput", nil)
+}
+
+// PresetList says "Saved scenes"
+// in the language the app shows.
+func PresetList() string { return In(i18n.Locale()).PresetList() }
+
+// PresetList says "Saved scenes"
+// in the language of msgs.
+func (msgs Messages) PresetList() string {
+	return Catalog.Format(msgs.locale, "presetList", nil)
+}
