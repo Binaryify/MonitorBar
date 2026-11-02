@@ -284,7 +284,7 @@ func (s *store) applyGamma() {
 		s.prefs.Pictures[s.monitor.Key()] = pictureState{s.prefs.SoftBrightness, s.prefs.Warmth}
 	}
 	err := s.setGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100)
-	if s.prefs.SyncPicture {
+	if s.prefs.SyncPicture && !s.prefs.ExcludedScreens[s.monitor.Key()] {
 		for _, m := range display.ExternalMonitors() {
 			if !m.Same(s.monitor) && !s.prefs.ExcludedScreens[m.Key()] {
 				s.prefs.Pictures[m.Key()] = pictureState{s.prefs.SoftBrightness, s.prefs.Warmth}
@@ -325,11 +325,11 @@ func (s *store) inputChannel() string {
 // connect finds the display on the LAN: the host found last time first,
 // then a scan.
 func (s *store) connect() {
-	if s.detecting || s.chasing {
+	if s.detecting || s.chasing || s.readingVolume {
 		return
 	}
 	for _, p := range s.peers {
-		if p.chasing {
+		if p.chasing || p.readingVolume {
 			return
 		}
 	}
@@ -379,6 +379,7 @@ func (s *store) connect() {
 			s.prefs.KnownHosts = slices.Clone(hosts)
 			s.dirty = true
 			s.link = link
+			s.offline = link != nil && volumeErr != nil
 			if link == nil {
 				s.inputs, s.hasVolume = nil, s.ddcVolume // DDC/CI may still have volume
 				return
@@ -894,7 +895,7 @@ func (s *store) installUpdate() {
 // MARK: Display modes
 
 func (s *store) applyMode(m display.Mode) {
-	if s.prefs.SyncResolution {
+	if s.prefs.SyncResolution && !s.prefs.ExcludedScreens[s.monitor.Key()] {
 		type change struct {
 			monitor display.Monitor
 			mode    display.Mode

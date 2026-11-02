@@ -117,7 +117,7 @@ func (s *store) audioKeyTargets() []*store {
 		}
 		if s.prefs.SyncVolume {
 			for _, p := range s.peers {
-				if p.hasVolume && !p.offline {
+				if p.hasVolume && !p.offline && !s.excludedAudio(p) {
 					out = append(out, p)
 				}
 			}

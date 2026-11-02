@@ -86,3 +86,32 @@ func (s *settings) save() {
 	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
 	_ = os.WriteFile(s.path, data, 0o644)
 }
+
+// moveDevice preserves every IP-keyed setting when an address changes.
+func (s *settings) moveDevice(old, next string) {
+	if old == next {
+		return
+	}
+	moveMapKey(s.DeviceNames, old, next)
+	moveMapKey(s.AudioBindings, old, next)
+	moveMapKey(s.ScreenBindings, old, next)
+	moveMapKey(s.ExcludedAudio, old, next)
+	for name, p := range s.Presets {
+		moveMapKey(p.Volumes, old, next)
+		s.Presets[name] = p
+	}
+	for i, h := range s.KnownHosts {
+		if h == old {
+			s.KnownHosts[i] = next
+		}
+	}
+	if s.NetworkHost == old {
+		s.NetworkHost = next
+	}
+}
+func moveMapKey[V any](values map[string]V, old, next string) {
+	if v, ok := values[old]; ok {
+		values[next] = v
+		delete(values, old)
+	}
+}

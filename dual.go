@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/binaryify/MonitorBar/internal/mitv"
-	"net"
 
 	"github.com/binaryify/MonitorBar/locales"
 	"github.com/egoist/mygo/ui"
@@ -26,10 +26,6 @@ func (p *panel) dualControls(c *ui.Context) {
 			}
 		}
 		ui.Text(c, locales.DualHint()).FontSize(10)
-		if labeledSwitch(c.Key("delta"), locales.SyncDelta(), &s.prefs.SyncDelta) {
-			s.dirty = true
-			s.save()
-		}
 		for i, m := range s.screens {
 			include := !s.prefs.ExcludedScreens[m.Key()]
 			if labeledSwitch(c.Key(fmt.Sprint("include-screen", i)), fmt.Sprintf("%s %d", locales.SyncMember(), i+1), &include) {
@@ -41,39 +37,39 @@ func (p *panel) dualControls(c *ui.Context) {
 				s.save()
 			}
 		}
-		if chipText(c.Key("presets-toggle"), locales.PresetList(), p.showPresets) {
-			p.showPresets = !p.showPresets
-		}
-		if p.showPresets {
-			p.presetControls(c)
-		}
 
 		for _, o := range []struct {
-			label string
-			value *bool
-		}{{locales.SyncVolume(), &s.prefs.SyncVolume}, {locales.SyncPicture(), &s.prefs.SyncPicture}, {locales.SyncResolution(), &s.prefs.SyncResolution}} {
-			ui.Row(c).Children(func() {
-				ui.Text(c, o.label).Grow(1)
-				if ui.Switch(c.Key(o.label), o.value).Label(o.label).Changed() {
-					s.dirty = true
-					s.save()
-					if *o.value {
-						switch o.label {
-						case locales.SyncVolume():
-							if s.hasVolume {
-								s.setVolume(s.volume)
-							}
-						case locales.SyncPicture():
-							s.applyGamma()
-						case locales.SyncResolution():
-							if s.hasCurrent {
-								s.applyMode(s.current)
-							}
-						}
-					}
+			key, label string
+			value      *bool
+			apply      func()
+		}{
+			{"volume", locales.SyncVolume(), &s.prefs.SyncVolume, func() {
+				if s.hasVolume {
+					s.setVolume(s.volume)
 				}
-			})
+			}},
+			{"picture", locales.SyncPicture(), &s.prefs.SyncPicture, s.applyGamma},
+			{"resolution", locales.SyncResolution(), &s.prefs.SyncResolution, func() {
+				if s.hasCurrent {
+					s.applyMode(s.current)
+				}
+			}},
+		} {
+			if labeledSwitch(c.Key(o.key), o.label, o.value) {
+				s.dirty = true
+				s.save()
+				if *o.value {
+					o.apply()
+				}
+			}
 		}
+		if s.prefs.SyncVolume {
+			if labeledSwitch(c.Key("delta"), locales.SyncDelta(), &s.prefs.SyncDelta) {
+				s.dirty = true
+				s.save()
+			}
+		}
+
 		if chipText(c.Key("rescan-dual"), locales.DualDiscover(), false) {
 			s.connect()
 		}
@@ -176,24 +172,13 @@ func (p *panel) dualControls(c *ui.Context) {
 						valid = false
 					}
 				}
-				if valid && !device.chasing && !device.readingVolume {
-					if s.prefs.DeviceNames == nil {
-						s.prefs.DeviceNames = map[string]string{}
-					}
-					if s.prefs.AudioBindings != nil {
-						s.prefs.AudioBindings[address] = s.prefs.AudioBindings[host]
-						delete(s.prefs.AudioBindings, host)
-					}
-					s.prefs.DeviceNames[address] = name
-					delete(s.prefs.DeviceNames, host)
-					for i, h := range s.prefs.KnownHosts {
-						if h == host {
-							s.prefs.KnownHosts[i] = address
-						}
-					}
-					if device == s {
-						s.prefs.NetworkHost = address
-					}
+				if address == host {
+					continue
+				}
+				if valid && !device.chasing && !device.readingVolume && !s.detecting {
+					s.prefs.moveDevice(host, address)
+					p.expandedDevice = address
+
 					device.link = mitv.New(address)
 					device.offline = true
 					device.readVolume()
@@ -205,9 +190,14 @@ func (p *panel) dualControls(c *ui.Context) {
 			}
 
 		}
-		p.mediaKeys(c)
+		if chipText(c.Key("presets-toggle"), locales.PresetList(), p.showPresets) {
+			p.showPresets = !p.showPresets
+		}
+		if p.showPresets {
+			p.presetControls(c)
+		}
 		for _, peer := range s.peers {
-			if peer.notice != "" {
+			if peer.notice != "" && !peer.offline {
 				ui.Text(c, peer.link.Host+": "+peer.notice).FontSize(10)
 			}
 		}
