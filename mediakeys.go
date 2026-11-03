@@ -26,7 +26,7 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		if len(s.audioKeyTargets()) == 0 {
 			return nil, false // the sound plays elsewhere, at macOS's volume
 		}
-		delta := float64(shortcutStep)
+		delta := s.prefs.volumeStep()
 		if k == mediakeys.VolumeDown {
 			delta = -delta
 		}

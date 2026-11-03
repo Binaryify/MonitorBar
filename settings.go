@@ -45,7 +45,8 @@ type settings struct {
 	// for none.
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
-	MediaKeys bool `json:"mediaKeys"`
+	MediaKeys  bool `json:"mediaKeys"`
+	VolumeStep int  `json:"volumeStep"`
 	// Showing the level under the menu bar icon as the keys change it.
 	HUD bool `json:"hud"`
 	// The language chosen in the panel, "" to follow the system's.
@@ -64,7 +65,7 @@ func dataDir() string {
 
 func loadSettings() *settings {
 	s := &settings{SoftBrightness: 100, DayStart: "07:00", NightStart: "19:00", DayScene: "day", NightScene: "night",
-		FollowMin: 10, FollowMax: 100, HUD: true,
+		FollowMin: 10, FollowMax: 100, HUD: true, VolumeStep: 2,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
 		_ = json.Unmarshal(data, s)
@@ -116,4 +117,12 @@ func moveMapKey[V any](values map[string]V, old, next string) {
 		values[next] = v
 		delete(values, old)
 	}
+}
+
+// volumeStep also handles older settings and invalid saved values.
+func (s *settings) volumeStep() float64 {
+	if s.VolumeStep < 1 || s.VolumeStep > 10 {
+		return 2
+	}
+	return float64(s.VolumeStep)
 }

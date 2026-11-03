@@ -249,6 +249,15 @@ func (p *panel) shortcuts(c *ui.Context) {
 				s.dirty = true
 			}
 		})
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, locales.VolumeStep()).FontSize(11)
+			step := s.prefs.volumeStep()
+			if ui.Slider(c.Key("volume-step"), &step, 1, 10).Label(locales.VolumeStep()).Grow(1).Changed() {
+				s.prefs.VolumeStep = int(math.Round(step))
+				s.dirty = true
+			}
+			ui.Text(c, fmt.Sprint(int(s.prefs.volumeStep()))).FontSize(11).Width(20)
+		})
 		if mediakeys.Supported {
 			p.mediaKeys(c)
 		}

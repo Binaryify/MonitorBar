@@ -747,6 +747,16 @@ func (msgs Messages) ShowHud() string {
 	return Catalog.Format(msgs.locale, "showHud", nil)
 }
 
+// VolumeStep says "Volume step"
+// in the language the app shows.
+func VolumeStep() string { return In(i18n.Locale()).VolumeStep() }
+
+// VolumeStep says "Volume step"
+// in the language of msgs.
+func (msgs Messages) VolumeStep() string {
+	return Catalog.Format(msgs.locale, "volumeStep", nil)
+}
+
 // MediaKeys says "Use the keyboard's brightness and volume keys"
 // in the language the app shows.
 func MediaKeys() string { return In(i18n.Locale()).MediaKeys() }

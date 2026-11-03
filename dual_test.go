@@ -91,3 +91,36 @@ func TestBrightnessMediaKey(t *testing.T) {
 		t.Fatal("brightness key did not dim screen", gamma)
 	}
 }
+
+func TestVolumeStepSetting(t *testing.T) {
+	for _, tc := range []struct {
+		saved int
+		want  float64
+	}{{0, 2}, {2, 2}, {7, 7}, {-1, 2}, {11, 2}} {
+		p, _ := testPanel(t)
+		s := p.s
+		s.prefs.VolumeStep = tc.saved
+		s.volume = 50
+		step, _ := s.mediaKey(mediakeys.VolumeUp)
+		if step == nil {
+			t.Fatal("volume key not intercepted")
+		}
+		step()
+		if s.volume != 50+tc.want {
+			t.Fatalf("setting %d: got %v", tc.saved, s.volume)
+		}
+		for _, sc := range shortcuts {
+			if sc.id == "volumeDown" {
+				sc.run(s)
+			}
+		}
+		if s.volume != 50 {
+			t.Fatalf("shortcut did not use step %v", tc.want)
+		}
+		s.volume = 99
+		step()
+		if s.volume != 100 {
+			t.Fatal("volume exceeded 100")
+		}
+	}
+}

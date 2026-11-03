@@ -508,7 +508,7 @@ func TestMediaKey(t *testing.T) {
 	}
 	if step, _ := s.mediaKey(mediakeys.VolumeDown); step == nil {
 		t.Fatal("volume down left to macOS with the sound on the display")
-	} else if step(); s.volume != 75 {
+	} else if step(); s.volume != 78 {
 		t.Errorf("volume %v after down from 80", s.volume)
 	}
 
