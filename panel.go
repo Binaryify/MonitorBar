@@ -114,7 +114,7 @@ func (p *panel) header(c *ui.Context) {
 			icon(c, "display").FontSize(15).TextColor(ui.RGB(255, 255, 255))
 		})
 		ui.Column(c).Gap(3).Grow(1).Children(func() {
-			ui.Text(c, or(s.monitor.Name, locales.MonitorUnnamed())).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
+			ui.Text(c, p.headerTitle()).FontSize(16).FontWeight(600).LetterSpacing(-0.3).SingleLine()
 			ui.Text(c, p.caption()).FontSize(10).FontWeight(500).TextColor(muted)
 		})
 		ui.Box(c).Size(24, 30).Center().TextColor(muted).Label(locales.MenuMore()).Cursor(ui.CursorPointer).Children(func() {
@@ -165,6 +165,16 @@ func (p *panel) header(c *ui.Context) {
 
 // caption sums the monitor up: "External display · HDMI · 4K · 160Hz".
 func (p *panel) caption() string {
+	if p.s.currentTab().id == "overview" {
+		for _, group := range p.s.overviewVolumes() {
+			if len(group) > 1 {
+				if p.s.prefs.SyncPicture {
+					return locales.SyncedBrightness() + " · " + locales.SyncedVolume()
+				}
+				return locales.SyncedVolume()
+			}
+		}
+	}
 	parts := []string{locales.CaptionExternal()}
 	if p.s.monitor.Connection != "" {
 		parts = append(parts, p.s.monitor.Connection)
@@ -325,4 +335,11 @@ func (s *store) currentTab() tab {
 func (s *store) setLanguage(tag string) {
 	s.prefs.Language, s.dirty = tag, true
 	mygo.App.SetLocale(tag)
+}
+
+func (p *panel) headerTitle() string {
+	if p.s.currentTab().id == "overview" {
+		return p.s.overviewTitle()
+	}
+	return p.s.screenName(p.s.monitor.Key(), p.s.monitor.Name)
 }

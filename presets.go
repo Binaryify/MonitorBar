@@ -143,11 +143,9 @@ func (p *panel) presetControls(c *ui.Context) {
 }
 
 func (s *store) screenLabel(index int, key, name string) string {
-	for host, bound := range s.prefs.ScreenBindings {
-		if bound == key && s.prefs.DeviceNames[host] != "" {
-			name = s.prefs.DeviceNames[host]
-			break
-		}
+	label := s.screenName(key, name)
+	if label != name {
+		return label
 	}
-	return fmt.Sprintf("%d · %s", index+1, name)
+	return fmt.Sprintf("%d · %s", index+1, label)
 }

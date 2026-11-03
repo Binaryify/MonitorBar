@@ -747,6 +747,26 @@ func (msgs Messages) ShowHud() string {
 	return Catalog.Format(msgs.locale, "showHud", nil)
 }
 
+// SyncedBrightness says "Synced brightness"
+// in the language the app shows.
+func SyncedBrightness() string { return In(i18n.Locale()).SyncedBrightness() }
+
+// SyncedBrightness says "Synced brightness"
+// in the language of msgs.
+func (msgs Messages) SyncedBrightness() string {
+	return Catalog.Format(msgs.locale, "syncedBrightness", nil)
+}
+
+// SyncedVolume says "Synced volume"
+// in the language the app shows.
+func SyncedVolume() string { return In(i18n.Locale()).SyncedVolume() }
+
+// SyncedVolume says "Synced volume"
+// in the language of msgs.
+func (msgs Messages) SyncedVolume() string {
+	return Catalog.Format(msgs.locale, "syncedVolume", nil)
+}
+
 // VolumeStep says "Volume step"
 // in the language the app shows.
 func VolumeStep() string { return In(i18n.Locale()).VolumeStep() }
@@ -1269,11 +1289,11 @@ func (msgs Messages) DualTitle() string {
 	return Catalog.Format(msgs.locale, "dualTitle", nil)
 }
 
-// DualHint says "Audio devices are identified by IP; screen selection controls picture settings."
+// DualHint says "Bind each device to its screen to use its custom name for brightness and resolution controls."
 // in the language the app shows.
 func DualHint() string { return In(i18n.Locale()).DualHint() }
 
-// DualHint says "Audio devices are identified by IP; screen selection controls picture settings."
+// DualHint says "Bind each device to its screen to use its custom name for brightness and resolution controls."
 // in the language of msgs.
 func (msgs Messages) DualHint() string {
 	return Catalog.Format(msgs.locale, "dualHint", nil)

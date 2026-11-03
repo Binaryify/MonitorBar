@@ -119,6 +119,8 @@
     }
   },
   "showHud": "Show the level as keys change it",
+  "syncedBrightness": "Synced brightness",
+  "syncedVolume": "Synced volume",
   "volumeStep": "Volume step",
   "mediaKeys": "Use the keyboard's brightness and volume keys",
   "mediaKeysNote": "Advanced: F1/F2 without fn set the external brightness, and F10/F11/F12 mute it and set its volume while the sound plays on it. Needs the Accessibility permission.",
@@ -306,7 +308,7 @@
   },
   "tabSync": "Sync",
   "dualTitle": "Multiple displays",
-  "dualHint": "Audio devices are identified by IP; screen selection controls picture settings.",
+  "dualHint": "Bind each device to its screen to use its custom name for brightness and resolution controls.",
   "syncVolume": "Sync volume and mute",
   "syncPicture": "Sync software brightness and warmth",
   "syncResolution": "Sync resolution and refresh rate",

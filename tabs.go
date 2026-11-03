@@ -20,10 +20,29 @@ import (
 
 func (p *panel) overview(c *ui.Context) {
 	s := p.s
+	showScreens := !s.prefs.SyncPicture
+	for _, m := range s.screens {
+		if s.prefs.ExcludedScreens[m.Key()] {
+			showScreens = true
+		}
+	}
+	if showScreens && len(s.screens) > 1 {
+		ui.Row(c).Gap(6).Children(func() {
+			for i, m := range s.screens {
+				if chipText(c.Key(fmt.Sprintf("overview-screen-%d", i)), s.screenLabel(i, m.Key(), m.Name), s.monitor.Same(m)) {
+					s.selectScreen(m)
+				}
+			}
+		})
+	}
 	p.hero(c)
 	if sources := s.sources(); len(sources) > 0 {
 		card(c, func() {
-			cardTitle(c, locales.Inputs(), "plug", s.inputChannel())
+			inputTitle := locales.Inputs()
+			if len(s.peers) > 0 {
+				inputTitle += " · " + s.deviceLabel()
+			}
+			cardTitle(c, inputTitle, "plug", s.inputChannel())
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, src := range sources {
 					if chipText(c.Key(src.ID), src.Name, s.input == src.ID) {
@@ -33,7 +52,7 @@ func (p *panel) overview(c *ui.Context) {
 			})
 		})
 	}
-	if s.hasBrightness {
+	if s.hasBrightness && !(s.prefs.SyncPicture && !s.prefs.ExcludedScreens[s.monitor.Key()]) {
 		combined := s.combinedBrightness()
 		caption := locales.BrightnessCombined()
 		switch {
@@ -44,20 +63,16 @@ func (p *panel) overview(c *ui.Context) {
 		case s.prefs.FollowBuiltin && s.canFollow():
 			caption = locales.BrightnessFollowing()
 		}
-		if (sliderCard{key: "backlight", title: locales.Brightness(), caption: caption, icon: "sun",
+		if (sliderCard{key: "backlight", title: p.brightnessTitle(), caption: caption, icon: "sun",
 			value: &combined, lo: 0, hi: 100, step: 5}).show(c) {
 			s.setCombined(combined)
 		}
-	} else if (sliderCard{key: "brightness", title: locales.Brightness(), caption: locales.BrightnessSoftware(), icon: "sun",
+	} else if (sliderCard{key: "brightness", title: p.brightnessTitle(), caption: locales.BrightnessSoftware(), icon: "sun",
 		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
 		s.applyGamma()
 	}
-	if s.hasVolume {
-		p.volume(c)
-		for _, peer := range s.peers {
-			other := &panel{s: peer}
-			other.volume(c.Key(peer.link.Host))
-		}
+	for i, group := range s.overviewVolumes() {
+		p.volumeGroup(c.Key(fmt.Sprintf("volume-group-%d", i)), group)
 	}
 	p.scenes(c)
 }
@@ -100,32 +115,58 @@ func (p *panel) hero(c *ui.Context) {
 	})
 }
 
-func (p *panel) volume(c *ui.Context) {
+func (p *panel) brightnessTitle() string {
 	s := p.s
+	if s.prefs.SyncPicture && !s.prefs.ExcludedScreens[s.monitor.Key()] {
+		return locales.SyncedBrightness()
+	}
+	return locales.Brightness() + " · " + s.screenName(s.monitor.Key(), s.monitor.Name)
+}
+
+func (p *panel) volumeGroup(c *ui.Context, devices []*store) {
+	s := devices[0]
+	title := locales.Volume()
+	if len(devices) > 1 {
+		title = locales.SyncedVolume()
+	}
 	card(c, func() {
 		ui.Row(c).Gap(8).Children(func() {
 			name, label := "volume", locales.Mute()
-			if s.volume == 0 {
+			muteTarget := s
+			for _, d := range devices {
+				if !d.offline && d.volume > 0 {
+					muteTarget = d
+					break
+				}
+			}
+			if muteTarget.volume == 0 {
 				name, label = "volumeOff", locales.Unmute()
 			}
-			mute := chip(c.Key("mute"), s.volume == 0).Size(26, 22).Label(label)
+			mute := chip(c.Key("mute"), muteTarget.volume == 0).Size(26, 22).Label(label).Disabled(s.offline)
 			mute.Children(func() { icon(c, name).FontSize(12) })
 			if mute.Clicked() {
-				s.toggleMute()
-			}
-			title := locales.Volume()
-			if s.link != nil {
-				name := s.prefs.DeviceNames[s.link.Host]
-				if name == "" {
-					name = s.link.Host
-				}
-				title += " · " + name
+				muteTarget.toggleMute()
 			}
 			ui.Text(c, title).FontSize(12).FontWeight(600).Grow(1)
-			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
+			value := fmt.Sprint(int(math.Round(s.volume)))
+			low, high := s.volume, s.volume
+			for _, d := range devices {
+				low = min(low, d.volume)
+				high = max(high, d.volume)
+			}
+			if math.Round(low) != math.Round(high) {
+				value = fmt.Sprintf("%d–%d", int(math.Round(low)), int(math.Round(high)))
+			}
+			ui.Text(c, value).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
+		ui.Text(c, volumeGroupNames(devices)).FontSize(10).TextColor(muted)
+		for _, d := range devices {
+			if d.offline {
+				ui.Text(c, d.deviceLabel()+" · "+locales.LanOffline()).FontSize(10).TextColor(muted)
+			}
+		}
 		v := s.volume
-		if ui.Slider(c.Key("volume"), &v, 0, 100).Label(locales.Volume()).Changed() {
+		if ui.Slider(c.Key("volume"), &v, 0, 100).Label(title).Disabled(s.offline).Changed() {
 			s.setVolume(v)
 		}
 	})

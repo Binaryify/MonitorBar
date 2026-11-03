@@ -16,13 +16,7 @@ func (p *panel) dualControls(c *ui.Context) {
 		ui.Text(c, locales.DualTitle()).FontSize(12).FontWeight(600)
 		for i, m := range s.screens {
 			if chipText(c.Key(fmt.Sprint("screen", i)), s.screenLabel(i, m.Key(), m.Name), s.monitor.Same(m)) {
-				s.monitor = m
-				if picture, ok := s.prefs.Pictures[m.Key()]; ok {
-					s.prefs.SoftBrightness, s.prefs.Warmth = picture.Brightness, picture.Warmth
-				}
-				s.modes = m.Modes()
-				s.current, s.hasCurrent = m.CurrentMode()
-				s.probeDDC()
+				s.selectScreen(m)
 			}
 		}
 		ui.Text(c, locales.DualHint()).FontSize(10)
