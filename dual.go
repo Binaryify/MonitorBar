@@ -179,7 +179,7 @@ func (p *panel) dualControls(c *ui.Context) {
 					s.prefs.moveDevice(host, address)
 					p.expandedDevice = address
 
-					device.link = mitv.New(address)
+					device.link = mitv.NewBound(address, s.prefs.DeviceMACs[address])
 					device.offline = true
 					device.readVolume()
 					s.dirty = true

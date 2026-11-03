@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"path/filepath"
 	"slices"
@@ -336,27 +337,55 @@ func (s *store) connect() {
 	s.detecting = true
 	cached := s.prefs.NetworkHost
 	known := slices.Clone(s.prefs.KnownHosts)
+	identities := maps.Clone(s.prefs.DeviceMACs)
+	if identities == nil {
+		identities = map[string]string{}
+	}
+	for _, host := range known {
+		if _, ok := identities[host]; !ok {
+			identities[host] = ""
+		}
+	}
 	go func() {
 		hosts, _ := mitv.DiscoverAll()
+		found := map[string]string{}
+		for _, host := range hosts {
+			found[host] = mitv.HardwareAddress(host)
+		}
+		moves := addressMoves(identities, found)
+		remapKeys(identities, moves)
+		for i, h := range known {
+			if next, ok := moves[h]; ok {
+				known[i] = next
+			}
+		}
+		if next, ok := moves[cached]; ok {
+			cached = next
+		}
+		for host, mac := range found {
+			if identities[host] == "" {
+				identities[host] = mac
+			}
+		}
 		for _, h := range known {
 			if !slices.Contains(hosts, h) {
 				hosts = append(hosts, h)
 			}
 		}
 		var peers []*store
-		link := mitv.New(cached)
+		link := mitv.NewBound(cached, identities[cached])
 		// The host found last time must still be a monitor: addresses move.
-		if cached == "" || !link.IsMonitor() {
+		if cached == "" || (identities[cached] == "" && !link.IsMonitor()) {
 			link = nil
 			if len(hosts) > 0 {
-				link = mitv.New(hosts[0])
+				link = mitv.NewBound(hosts[0], identities[hosts[0]])
 			}
 		}
 		for _, host := range hosts {
 			if link != nil && host == link.Host {
 				continue
 			}
-			other := mitv.New(host)
+			other := mitv.NewBound(host, identities[host])
 			v, err := other.Volume()
 			if err != nil && !slices.Contains(known, host) {
 				continue
@@ -368,13 +397,19 @@ func (s *store) connect() {
 		if link != nil {
 			var err error
 			if sources, err = link.Sources(); err != nil || len(sources) == 0 {
-				link = nil
+				if identities[link.Host] != "" {
+					volumeErr = mitv.ErrNotFound
+				} else {
+					link = nil
+				}
 			} else {
 				volume, volumeErr = link.Volume()
 			}
 		}
 		s.post(func() {
 			s.detecting = false
+			s.prefs.remapDevices(moves)
+			s.prefs.DeviceMACs = identities
 			s.peers = peers
 			s.prefs.KnownHosts = slices.Clone(hosts)
 			s.dirty = true
@@ -552,12 +587,13 @@ func (s *store) networkPoll() {
 	if s.networkTick%5 != 0 {
 		return
 	}
+	if s.networkTick%30 == 0 {
+		s.connect()
+		return
+	}
 	s.readVolume()
 	for _, peer := range s.peers {
 		peer.readVolume()
-	}
-	if s.link == nil && s.networkTick%30 == 0 {
-		s.connect()
 	}
 }
 

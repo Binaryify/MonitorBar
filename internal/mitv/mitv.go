@@ -38,8 +38,9 @@ var sourceNames = map[int]string{SourceDP: "DP"}
 
 // Link is a client for one device.
 type Link struct {
-	Host   string
-	client *http.Client
+	Host          string
+	client        *http.Client
+	checkIdentity func() error
 }
 
 func New(host string) *Link {
@@ -133,6 +134,11 @@ func competitiveSteps(on bool) []step {
 }
 
 func (l *Link) call(path string, query url.Values, data any) error {
+	if l.checkIdentity != nil {
+		if err := l.checkIdentity(); err != nil {
+			return err
+		}
+	}
 	u := url.URL{Scheme: "http", Host: fmt.Sprintf("%s:%d", l.Host, Port), Path: "/" + path, RawQuery: query.Encode()}
 	resp, err := l.client.Get(u.String())
 	if err != nil {

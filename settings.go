@@ -15,6 +15,7 @@ type settings struct {
 	Pictures        map[string]pictureState  `json:"pictures,omitempty"`
 	Presets         map[string]displayPreset `json:"presets,omitempty"`
 
+	DeviceMACs     map[string]string `json:"deviceMACs,omitempty"`
 	KnownHosts     []string          `json:"knownHosts,omitempty"`
 	AudioBindings  map[string]string `json:"audioBindings,omitempty"`
 	DeviceNames    map[string]string `json:"deviceNames,omitempty"`
@@ -92,6 +93,7 @@ func (s *settings) moveDevice(old, next string) {
 	if old == next {
 		return
 	}
+	moveMapKey(s.DeviceMACs, old, next)
 	moveMapKey(s.DeviceNames, old, next)
 	moveMapKey(s.AudioBindings, old, next)
 	moveMapKey(s.ScreenBindings, old, next)

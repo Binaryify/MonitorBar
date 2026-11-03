@@ -149,3 +149,13 @@ REDMI monitors do not support DDC/CI, so the usual tools (MonitorControl, Better
 ## 许可证
 
 [MIT](LICENSE)
+
+### LAN identity / 局域网设备识别
+
+On macOS, MonitorBar learns each directly reachable monitor’s network MAC after discovery and checks for address changes every 30 seconds. Unique MAC matches preserve device names, audio/screen bindings, synchronization membership and preset volumes, including when two monitors exchange IP addresses. Bound devices refuse requests if their identity cannot be verified. Duplicate identities or occupied destinations are not automatically merged.
+
+This requires the same network-interface MAC and a local IPv4 neighbor entry. Changing network interfaces/MACs, routed networks and other platforms may require manual IP updates. Identical EDID model numbers and missing serial numbers are not unique identities. Physical screen bindings still depend on the OS display identity; displays with no serial may need rebinding after cable/port changes.
+
+macOS 下，程序发现显示器后会记录局域网 MAC，每 30 秒检查地址变化；同一 MAC 更换 IP 或两台交换 IP 时，昵称、音频与屏幕绑定、同步成员设置和场景音量会一起迁移。身份无法确认时停止发送控制请求；标识重复或目标地址仍属于未匹配设备时不自动合并。
+
+此功能需要同一网卡 MAC 和本地 IPv4 邻居记录。更换网卡/MAC、跨路由网络或其他平台可能仍需手动更新 IP。相同型号及缺失的 EDID 序列号不能用于区分设备；没有序列号的物理屏幕在换线、换接口后仍可能需要重新绑定。
