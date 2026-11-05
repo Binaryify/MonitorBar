@@ -477,6 +477,76 @@ func (msgs Messages) SceneNight() string {
 	return Catalog.Format(msgs.locale, "sceneNight", nil)
 }
 
+// SceneSaveLabel says "Save the current brightness and color temperature as a scene"
+// in the language the app shows.
+func SceneSaveLabel() string { return In(i18n.Locale()).SceneSaveLabel() }
+
+// SceneSaveLabel says "Save the current brightness and color temperature as a scene"
+// in the language of msgs.
+func (msgs Messages) SceneSaveLabel() string {
+	return Catalog.Format(msgs.locale, "sceneSaveLabel", nil)
+}
+
+// SceneCustomName says "Scene {n}"
+// in the language the app shows.
+func SceneCustomName(n int) string { return In(i18n.Locale()).SceneCustomName(n) }
+
+// SceneCustomName says "Scene {n}"
+// in the language of msgs.
+func (msgs Messages) SceneCustomName(n int) string {
+	return Catalog.Format(msgs.locale, "sceneCustomName", map[string]any{"n": n})
+}
+
+// SavedScenes says "My Scenes"
+// in the language the app shows.
+func SavedScenes() string { return In(i18n.Locale()).SavedScenes() }
+
+// SavedScenes says "My Scenes"
+// in the language of msgs.
+func (msgs Messages) SavedScenes() string {
+	return Catalog.Format(msgs.locale, "savedScenes", nil)
+}
+
+// SavedScenesNote says "Click a name to rename it"
+// in the language the app shows.
+func SavedScenesNote() string { return In(i18n.Locale()).SavedScenesNote() }
+
+// SavedScenesNote says "Click a name to rename it"
+// in the language of msgs.
+func (msgs Messages) SavedScenesNote() string {
+	return Catalog.Format(msgs.locale, "savedScenesNote", nil)
+}
+
+// SceneUntitled says "Untitled"
+// in the language the app shows.
+func SceneUntitled() string { return In(i18n.Locale()).SceneUntitled() }
+
+// SceneUntitled says "Untitled"
+// in the language of msgs.
+func (msgs Messages) SceneUntitled() string {
+	return Catalog.Format(msgs.locale, "sceneUntitled", nil)
+}
+
+// SceneName says "Scene name"
+// in the language the app shows.
+func SceneName() string { return In(i18n.Locale()).SceneName() }
+
+// SceneName says "Scene name"
+// in the language of msgs.
+func (msgs Messages) SceneName() string {
+	return Catalog.Format(msgs.locale, "sceneName", nil)
+}
+
+// SceneDelete says "Delete {name}"
+// in the language the app shows.
+func SceneDelete(name string) string { return In(i18n.Locale()).SceneDelete(name) }
+
+// SceneDelete says "Delete {name}"
+// in the language of msgs.
+func (msgs Messages) SceneDelete(name string) string {
+	return Catalog.Format(msgs.locale, "sceneDelete", map[string]any{"name": name})
+}
+
 // Warmth says "Color Temperature"
 // in the language the app shows.
 func Warmth() string { return In(i18n.Locale()).Warmth() }

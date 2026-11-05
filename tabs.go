@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"runtime"
@@ -121,13 +122,24 @@ func (p *panel) volume(c *ui.Context) {
 func (p *panel) scenes(c *ui.Context) {
 	s := p.s
 	card(c, func() {
-		cardTitle(c, locales.Scenes(), "sparkles", locales.ScenesNote())
-		ui.Row(c).Gap(6).Children(func() {
-			for _, sc := range scenes {
-				e := chip(c.Key(sc.id), s.isActive(sc)).Grow(1).Height(50).Gap(5)
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			icon(c, "sparkles").FontSize(13)
+			ui.Text(c, locales.Scenes()).FontSize(12).FontWeight(600).Grow(1)
+			ui.Text(c, locales.ScenesNote()).FontSize(10).TextColor(muted)
+			if len(s.prefs.SavedScenes) < maxSavedScenes {
+				save := chip(c.Key("save-scene"), false).Size(22, 20).Label(locales.SceneSaveLabel()).Tooltip(locales.SceneSaveLabel())
+				save.Children(func() { icon(c, "plus").FontSize(10) })
+				if save.Clicked() {
+					s.saveScene()
+				}
+			}
+		})
+		ui.Grid(c).Columns(4).Gap(6).Children(func() {
+			for _, sc := range s.allScenes() {
+				e := chip(c.Key(sc.id), s.isActive(sc)).Height(50).Gap(5)
 				e.Children(func() {
 					icon(c, sc.icon).FontSize(14)
-					ui.Text(c, sc.label()).FontSize(10).FontWeight(500)
+					ui.Text(c, sc.label()).FontSize(10).FontWeight(500).SingleLine()
 				})
 				if e.Clicked() {
 					s.apply(sc)
@@ -137,11 +149,39 @@ func (p *panel) scenes(c *ui.Context) {
 	})
 }
 
+// savedScenes renames and deletes the scenes the user saved.
+func (p *panel) savedScenes(c *ui.Context) {
+	s := p.s
+	card(c, func() {
+		cardTitle(c, locales.SavedScenes(), "star", locales.SavedScenesNote())
+		deleted := "" // deleted after the loop, which walks the slice
+		for i := range s.prefs.SavedScenes {
+			sc := &s.prefs.SavedScenes[i]
+			ui.Row(c.Key(sc.ID)).Gap(8).AlignItems(ui.Center).Children(func() {
+				if ui.TextInput(c.Key("name"), &sc.Name).Label(locales.SceneName()).Placeholder(locales.SceneUntitled()).Grow(1).Changed() {
+					s.dirty = true
+				}
+				del := chip(c.Key("delete"), false).Size(26, 22).Label(locales.SceneDelete(cmp.Or(sc.Name, locales.SceneUntitled())))
+				del.Children(func() { icon(c, "trash").FontSize(11) })
+				if del.Clicked() {
+					deleted = sc.ID
+				}
+			})
+		}
+		if deleted != "" {
+			s.deleteScene(deleted)
+		}
+	})
+}
+
 // MARK: 画面
 
 func (p *panel) picture(c *ui.Context) {
 	s := p.s
 	p.scenes(c)
+	if len(s.prefs.SavedScenes) > 0 {
+		p.savedScenes(c)
+	}
 	if s.canFollow() {
 		p.followBuiltin(c)
 	}
@@ -300,8 +340,9 @@ func (p *panel) followBuiltin(c *ui.Context) {
 // times.
 func (p *panel) autoSwitch(c *ui.Context) {
 	s := p.s
-	labels := make([]string, len(scenes))
-	for i, sc := range scenes {
+	all := s.allScenes()
+	labels := make([]string, len(all))
+	for i, sc := range all {
 		labels[i] = sc.label()
 	}
 	card(c, func() {
@@ -324,9 +365,9 @@ func (p *panel) autoSwitch(c *ui.Context) {
 				}
 				ui.Spacer(c)
 				// The select shows the labels; the settings keep the scene's id.
-				chosen := sceneByID(*scene).label()
+				chosen := s.sceneByID(*scene).label()
 				if ui.Select(c.Key(key+"-scene"), &chosen, labels).Label(locales.AutoScene(label)).Width(96).Changed() {
-					*scene = scenes[slices.Index(labels, chosen)].id
+					*scene = all[slices.Index(labels, chosen)].id
 					s.autoChanged()
 				}
 			})

@@ -71,6 +71,27 @@
   "sceneReading": "Reading",
   "sceneMovie": "Movie",
   "sceneNight": "Night",
+  "sceneSaveLabel": "Save the current brightness and color temperature as a scene",
+  "sceneCustomName": "Scene {n}",
+  "@sceneCustomName": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "savedScenes": "My Scenes",
+  "savedScenesNote": "Click a name to rename it",
+  "sceneUntitled": "Untitled",
+  "sceneName": "Scene name",
+  "sceneDelete": "Delete {name}",
+  "@sceneDelete": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "warmth": "Color Temperature",
   "warmthNote": "Warmer to the right, with less blue light",
   "warmthNeutral": "Neutral",

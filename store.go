@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
 	"slices"
@@ -26,24 +27,84 @@ type scene struct {
 	id                 string
 	label              func() string
 	icon               string
-	brightness, warmth float64
+	brightness, warmth float64     // a built-in scene's brightness is the backlight's when DDC/CI reaches it
+	saved              *savedScene // the user's, nil for a built-in scene
 }
 
 var scenes = []scene{
-	{"day", locales.SceneDay, "sun", 80, 0},
-	{"reading", locales.SceneReading, "book", 55, 25},
-	{"movie", locales.SceneMovie, "film", 100, 5},
-	{"night", locales.SceneNight, "moon", 30, 55},
+	{id: "day", label: locales.SceneDay, icon: "sun", brightness: 80},
+	{id: "reading", label: locales.SceneReading, icon: "book", brightness: 55, warmth: 25},
+	{id: "movie", label: locales.SceneMovie, icon: "film", brightness: 100, warmth: 5},
+	{id: "night", label: locales.SceneNight, icon: "moon", brightness: 30, warmth: 55},
+}
+
+// levels is the backlight the scene sets, -1 to leave it, and the software
+// dimming, on a monitor whose backlight DDC/CI reaches or not.
+func (sc scene) levels(backlight bool) (float64, float64) {
+	switch {
+	case sc.saved != nil && sc.saved.Backlight != nil:
+		return *sc.saved.Backlight, sc.saved.Soft
+	case sc.saved != nil:
+		return -1, sc.saved.Soft
+	case backlight:
+		return sc.brightness, 100 // a built-in scene's brightness is all backlight
+	}
+	return -1, sc.brightness
+}
+
+// maxSavedScenes keeps the scenes in three rows of chips.
+const maxSavedScenes = 8
+
+// allScenes are the built-in scenes, then those the user saved.
+func (s *store) allScenes() []scene {
+	all := slices.Clone(scenes)
+	for i := range s.prefs.SavedScenes {
+		saved := &s.prefs.SavedScenes[i]
+		name := saved.Name
+		all = append(all, scene{id: saved.ID, label: func() string { return cmp.Or(name, locales.SceneUntitled()) },
+			icon: "star", warmth: saved.Warmth, saved: saved})
+	}
+	return all
 }
 
 // sceneByID finds a scene, the first for an id no scene has.
-func sceneByID(id string) scene {
-	for _, sc := range scenes {
+func (s *store) sceneByID(id string) scene {
+	all := s.allScenes()
+	for _, sc := range all {
 		if sc.id == id {
 			return sc
 		}
 	}
-	return scenes[0]
+	return all[0]
+}
+
+// saveScene keeps the current picture as a new scene.
+func (s *store) saveScene() {
+	if len(s.prefs.SavedScenes) >= maxSavedScenes {
+		return
+	}
+	n := 1
+	for slices.ContainsFunc(s.prefs.SavedScenes, func(sc savedScene) bool { return sc.ID == fmt.Sprintf("saved-%d", n) }) {
+		n++
+	}
+	sc := savedScene{ID: fmt.Sprintf("saved-%d", n), Name: locales.SceneCustomName(n), Soft: s.prefs.SoftBrightness, Warmth: s.prefs.Warmth}
+	if s.hasBrightness {
+		sc.Backlight = new(s.brightness)
+	}
+	s.prefs.SavedScenes, s.dirty = append(s.prefs.SavedScenes, sc), true
+}
+
+// deleteScene removes a saved scene; switching by the time goes back to the
+// built-in scene where it had chosen it.
+func (s *store) deleteScene(id string) {
+	s.prefs.SavedScenes = slices.DeleteFunc(s.prefs.SavedScenes, func(sc savedScene) bool { return sc.ID == id })
+	if s.prefs.DayScene == id {
+		s.prefs.DayScene = "day"
+	}
+	if s.prefs.NightScene == id {
+		s.prefs.NightScene = "night"
+	}
+	s.dirty = true
 }
 
 // store holds what the panel shows and the actions that change it. Its
@@ -183,19 +244,18 @@ func (s *store) setWarmth(percent float64) {
 // apply sets a scene's brightness, on the backlight when DDC/CI reaches it,
 // and its warmth.
 func (s *store) apply(sc scene) {
-	if s.hasBrightness {
-		s.setBrightness(sc.brightness)
-		s.prefs.SoftBrightness = 100 // a scene's brightness is all backlight
-	} else {
-		s.prefs.SoftBrightness = sc.brightness
+	backlight, soft := sc.levels(s.hasBrightness)
+	if s.hasBrightness && backlight >= 0 {
+		s.setBrightness(backlight)
 	}
-	s.prefs.Warmth = sc.warmth
+	s.prefs.SoftBrightness, s.prefs.Warmth = soft, sc.warmth
 	s.applyGamma()
 }
 
 func (s *store) isActive(sc scene) bool {
-	return math.Abs(s.effectiveBrightness()-sc.brightness) < 1 && math.Abs(s.prefs.Warmth-sc.warmth) < 1 &&
-		(!s.hasBrightness || s.prefs.SoftBrightness >= 99.5)
+	backlight, soft := sc.levels(s.hasBrightness)
+	return math.Abs(s.prefs.SoftBrightness-soft) < 1 && math.Abs(s.prefs.Warmth-sc.warmth) < 1 &&
+		(!s.hasBrightness || backlight < 0 || math.Abs(s.brightness-backlight) < 1)
 }
 
 // Combined brightness, as BetterDisplay and MonitorControl have it (#9):
@@ -617,7 +677,7 @@ func (s *store) autoCheck() {
 	if period == schedule.Night {
 		id = s.prefs.NightScene
 	}
-	s.apply(sceneByID(id))
+	s.apply(s.sceneByID(id))
 	s.prefs.AutoPeriod, s.dirty = string(period), true
 }
 
@@ -639,9 +699,9 @@ func (s *store) autoTimes() schedule.Times {
 func (s *store) autoStatus() string {
 	period, next := s.autoTimes().At(s.now())
 	if period == schedule.Day {
-		return locales.AutoNowDay(next, sceneByID(s.prefs.NightScene).label())
+		return locales.AutoNowDay(next, s.sceneByID(s.prefs.NightScene).label())
 	}
-	return locales.AutoNowNight(next, sceneByID(s.prefs.DayScene).label())
+	return locales.AutoNowNight(next, s.sceneByID(s.prefs.DayScene).label())
 }
 
 // parseClock reads "15:04" into a time of day, or the fallback minutes.

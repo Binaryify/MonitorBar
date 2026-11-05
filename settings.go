@@ -22,6 +22,9 @@ type settings struct {
 	NightScene string `json:"nightScene"`
 	AutoPeriod string `json:"autoPeriod"` // the period whose scene was applied last
 
+	// Scenes the user saved, after the built-in ones (#13).
+	SavedScenes []savedScene `json:"savedScenes,omitempty"`
+
 	// Following the built-in display's brightness over DDC/CI (MacBooks).
 	FollowBuiltin bool    `json:"followBuiltin"`
 	FollowMin     float64 `json:"followMin"` // the external backlight at the built-in's darkest, %
@@ -37,6 +40,15 @@ type settings struct {
 	// The language chosen in the panel, "" to follow the system's.
 	Language string `json:"language,omitempty"`
 	path     string
+}
+
+// savedScene is the picture as it was when the user saved it.
+type savedScene struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Backlight *float64 `json:"backlight,omitempty"` // DDC/CI %, absent when it reached none
+	Soft      float64  `json:"softBrightness"`
+	Warmth    float64  `json:"warmth"`
 }
 
 // dataDir is where MonitorBar keeps its files.
