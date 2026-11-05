@@ -65,6 +65,58 @@ func (msgs Messages) MenuDetect() string {
 	return Catalog.Format(msgs.locale, "menuDetect", nil)
 }
 
+// MenuLink says "LAN Remote"
+// in the language the app shows.
+func MenuLink() string { return In(i18n.Locale()).MenuLink() }
+
+// MenuLink says "LAN Remote"
+// in the language of msgs.
+func (msgs Messages) MenuLink() string {
+	return Catalog.Format(msgs.locale, "menuLink", nil)
+}
+
+// MenuLinkMonitor says "{name} ({host})"
+// in the language the app shows.
+func MenuLinkMonitor(name string, host string) string {
+	return In(i18n.Locale()).MenuLinkMonitor(name, host)
+}
+
+// MenuLinkMonitor says "{name} ({host})"
+// in the language of msgs.
+func (msgs Messages) MenuLinkMonitor(name string, host string) string {
+	return Catalog.Format(msgs.locale, "menuLinkMonitor", map[string]any{"name": name, "host": host})
+}
+
+// MenuLinkNone says "None"
+// in the language the app shows.
+func MenuLinkNone() string { return In(i18n.Locale()).MenuLinkNone() }
+
+// MenuLinkNone says "None"
+// in the language of msgs.
+func (msgs Messages) MenuLinkNone() string {
+	return Catalog.Format(msgs.locale, "menuLinkNone", nil)
+}
+
+// SyncDisplays says "Sync"
+// in the language the app shows.
+func SyncDisplays() string { return In(i18n.Locale()).SyncDisplays() }
+
+// SyncDisplays says "Sync"
+// in the language of msgs.
+func (msgs Messages) SyncDisplays() string {
+	return Catalog.Format(msgs.locale, "syncDisplays", nil)
+}
+
+// SyncDisplaysNote says "Change the brightness, color temperature, scenes, volume and input of every display at once"
+// in the language the app shows.
+func SyncDisplaysNote() string { return In(i18n.Locale()).SyncDisplaysNote() }
+
+// SyncDisplaysNote says "Change the brightness, color temperature, scenes, volume and input of every display at once"
+// in the language of msgs.
+func (msgs Messages) SyncDisplaysNote() string {
+	return Catalog.Format(msgs.locale, "syncDisplaysNote", nil)
+}
+
 // MenuDisplaySettings says "Open Display Settings…"
 // in the language the app shows.
 func MenuDisplaySettings() string { return In(i18n.Locale()).MenuDisplaySettings() }

@@ -7,7 +7,7 @@ import "testing"
 func TestSavedScene(t *testing.T) {
 	p, gamma := testPanel(t)
 	s := p.s
-	s.prefs.SoftBrightness, s.prefs.Warmth = 45, 35
+	s.soft, s.warmth = 45, 35
 	tt := newTester(p)
 	if err := tt.Click("把当前亮度和色温保存为场景"); err != nil { // the save chip, by its label
 		t.Fatal(err)
@@ -30,8 +30,8 @@ func TestSavedScene(t *testing.T) {
 	if err := tt.Click("场景 1"); err != nil {
 		t.Fatal(err)
 	}
-	if s.prefs.SoftBrightness != 45 || s.prefs.Warmth != 35 || *gamma != [2]float64{0.45, 0.35} {
-		t.Errorf("applied: brightness %v warmth %v gamma %v", s.prefs.SoftBrightness, s.prefs.Warmth, *gamma)
+	if s.soft != 45 || s.warmth != 35 || *gamma != [2]float64{0.45, 0.35} {
+		t.Errorf("applied: brightness %v warmth %v gamma %v", s.soft, s.warmth, *gamma)
 	}
 
 	// The next one takes the next free number; deleting one switches by the
@@ -65,16 +65,16 @@ func TestSavedSceneKeepsBacklight(t *testing.T) {
 	p, _ := testPanel(t)
 	s := p.s
 	s.hasBrightness, s.brightness = true, 0
-	s.prefs.SoftBrightness, s.prefs.Warmth = 40, 10
+	s.soft, s.warmth = 40, 10
 	s.saveScene()
 	s.apply(scenes[2]) // movie: all backlight
-	if s.brightness != 100 || s.prefs.SoftBrightness != 100 {
-		t.Fatalf("movie: backlight %v software %v", s.brightness, s.prefs.SoftBrightness)
+	if s.brightness != 100 || s.soft != 100 {
+		t.Fatalf("movie: backlight %v software %v", s.brightness, s.soft)
 	}
 	saved := s.sceneByID("saved-1")
 	s.apply(saved)
-	if s.brightness != 0 || s.prefs.SoftBrightness != 40 || s.prefs.Warmth != 10 || !s.isActive(saved) {
-		t.Errorf("saved: backlight %v software %v warmth %v", s.brightness, s.prefs.SoftBrightness, s.prefs.Warmth)
+	if s.brightness != 0 || s.soft != 40 || s.warmth != 10 || !s.isActive(saved) {
+		t.Errorf("saved: backlight %v software %v warmth %v", s.brightness, s.soft, s.warmth)
 	}
 	if s.isActive(scenes[0]) {
 		t.Error("the day scene is highlighted too")

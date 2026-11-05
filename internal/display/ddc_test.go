@@ -70,3 +70,13 @@ func TestInputNameFor(t *testing.T) {
 		t.Errorf("other models 0x10 = %q, want DP 2", got)
 	}
 }
+
+func TestUniqueKeys(t *testing.T) {
+	got := uniqueKeys([]Monitor{{Key: "a"}, {Key: "b"}, {Key: "a"}, {Key: "a"}})
+	want := []string{"a", "b", "a#2", "a#3"}
+	for i, m := range got {
+		if m.Key != want[i] {
+			t.Errorf("key %d: %q, want %q", i, m.Key, want[i])
+		}
+	}
+}

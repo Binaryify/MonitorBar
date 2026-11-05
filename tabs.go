@@ -28,7 +28,7 @@ func (p *panel) overview(c *ui.Context) {
 			ui.Grid(c).Columns(4).Gap(6).Children(func() {
 				for _, src := range sources {
 					if chipText(c.Key(src.ID), src.Name, s.input == src.ID) {
-						s.selectInput(src)
+						s.each(func() { s.switchInput(src.ID) }) // the same input of each display in sync
 					}
 				}
 			})
@@ -47,11 +47,11 @@ func (p *panel) overview(c *ui.Context) {
 		}
 		if (sliderCard{key: "backlight", title: locales.Brightness(), caption: caption, icon: "sun",
 			value: &combined, lo: 0, hi: 100, step: 5}).show(c) {
-			s.setCombined(combined)
+			s.each(func() { s.setLevel(combined) })
 		}
-	} else if (sliderCard{key: "brightness", title: locales.Brightness(), caption: locales.BrightnessSoftware(), icon: "sun",
-		value: &s.prefs.SoftBrightness, lo: 20, hi: 100, step: 5}).show(c) {
-		s.applyGamma()
+	} else if level := s.soft; (sliderCard{key: "brightness", title: locales.Brightness(), caption: locales.BrightnessSoftware(), icon: "sun",
+		value: &level, lo: 20, hi: 100, step: 5}).show(c) {
+		s.each(func() { s.setLevel(level) })
 	}
 	if s.hasVolume {
 		p.volume(c)
@@ -113,8 +113,12 @@ func (p *panel) volume(c *ui.Context) {
 			ui.Text(c, locales.Volume()).FontSize(12).FontWeight(600).Grow(1)
 			ui.Text(c, fmt.Sprint(int(math.Round(s.volume)))).FontSize(20).FontWeight(600).FontFeatures("tnum")
 		})
-		if ui.Slider(c.Key("volume"), &s.volume, 0, 100).Label(locales.Volume()).Changed() {
-			s.setVolume(s.volume)
+		if volume := s.volume; ui.Slider(c.Key("volume"), &volume, 0, 100).Label(locales.Volume()).Changed() {
+			s.each(func() {
+				if s.hasVolume {
+					s.setVolume(volume)
+				}
+			})
 		}
 	})
 }
@@ -142,7 +146,7 @@ func (p *panel) scenes(c *ui.Context) {
 					ui.Text(c, sc.label()).FontSize(10).FontWeight(500).SingleLine()
 				})
 				if e.Clicked() {
-					s.apply(sc)
+					s.each(func() { s.apply(sc) })
 				}
 			}
 		})
@@ -186,14 +190,14 @@ func (p *panel) picture(c *ui.Context) {
 		p.followBuiltin(c)
 	}
 	p.autoSwitch(c)
-	if (sliderCard{key: "warmth", title: locales.Warmth(), caption: locales.WarmthNote(), icon: "thermometer",
-		value: &s.prefs.Warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
+	if warmth := s.warmth; (sliderCard{key: "warmth", title: locales.Warmth(), caption: locales.WarmthNote(), icon: "thermometer",
+		value: &warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
 			if v < 1 {
 				return locales.WarmthNeutral()
 			}
 			return fmt.Sprint(int(math.Round(v)))
 		}}).show(c) {
-		s.applyGamma()
+		s.each(func() { s.setWarmth(warmth) })
 	}
 	for i := range s.controls { // only what the monitor answers over DDC/CI
 		ctl := &s.controls[i]
@@ -210,7 +214,7 @@ func (p *panel) picture(c *ui.Context) {
 		})
 	})
 	if reset.Clicked() {
-		s.resetSoftware()
+		s.each(s.resetSoftware)
 	}
 	p.shortcuts(c)
 }

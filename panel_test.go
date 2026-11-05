@@ -37,18 +37,22 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 	t.Helper()
 	var gamma [2]float64
 	s := &store{
-		prefs:    &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
-		tracker:  usage.Open(filepath.Join(t.TempDir(), "usage.json")),
-		redraw:   func() {},
-		setGamma: func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
-		monitor:  display.Monitor{Name: "Mi Monitor", Connection: "HDMI"},
-		link:     mitv.New("192.0.2.1"),
-		inputs:   []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
-		volume:   80, hasVolume: true, deviceVolume: 80,
+		output: &output{
+			monitor: display.Monitor{Key: "mi", Name: "Mi Monitor", Connection: "HDMI"},
+			soft:    100, lastBuiltin: -1,
+			link:   mitv.New("192.0.2.1"),
+			inputs: []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
+			volume: 80, hasVolume: true, deviceVolume: 80,
+		},
+		prefs:          &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
+		tracker:        usage.Open(filepath.Join(t.TempDir(), "usage.json")),
+		redraw:         func() {},
+		setGamma:       func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
 		soundToDisplay: func() bool { return true },
 		onAdjust:       func(hudKind) {},
 		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
+	s.outputs = []*output{s.output}
 	s.prefs.DayScene, s.prefs.NightScene = "day", "night"
 	s.dayStart, s.nightStart = parseClock("07:00", 0), parseClock("19:00", 0)
 	for _, rate := range []int{160, 144, 120, 60} {
@@ -95,8 +99,8 @@ func TestSceneSetsGamma(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if p.s.prefs.SoftBrightness != 30 || p.s.prefs.Warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
-		t.Errorf("brightness %v warmth %v gamma %v", p.s.prefs.SoftBrightness, p.s.prefs.Warmth, *gamma)
+	if p.s.soft != 30 || p.s.warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
+		t.Errorf("brightness %v warmth %v gamma %v", p.s.soft, p.s.warmth, *gamma)
 	}
 }
 
@@ -169,8 +173,8 @@ func TestDDCOnly(t *testing.T) {
 	if err := tt.Click("夜间"); err != nil {
 		t.Fatal(err)
 	}
-	if s.brightness != 30 || s.prefs.SoftBrightness != 100 {
-		t.Errorf("night scene: backlight %v, software %v; want the backlight dimmed", s.brightness, s.prefs.SoftBrightness)
+	if s.brightness != 30 || s.soft != 100 {
+		t.Errorf("night scene: backlight %v, software %v; want the backlight dimmed", s.brightness, s.soft)
 	}
 	if err := tt.Click("画面"); err != nil {
 		t.Fatal(err)
@@ -196,8 +200,8 @@ func TestAutoSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !s.prefs.AutoSwitch || s.prefs.SoftBrightness != 80 || s.prefs.AutoPeriod != "day" {
-		t.Fatalf("after turning on at noon: on %v, brightness %v, period %q", s.prefs.AutoSwitch, s.prefs.SoftBrightness, s.prefs.AutoPeriod)
+	if !s.prefs.AutoSwitch || s.soft != 80 || s.prefs.AutoPeriod != "day" {
+		t.Fatalf("after turning on at noon: on %v, brightness %v, period %q", s.prefs.AutoSwitch, s.soft, s.prefs.AutoPeriod)
 	}
 	if !tt.HasText("现在是白天，19:00 切换到「夜间」") {
 		t.Errorf("status missing in %q", tt.Texts())
@@ -206,14 +210,14 @@ func TestAutoSwitch(t *testing.T) {
 	s.setSoftBrightness(65) // a manual change
 	now = now.Add(time.Hour)
 	s.autoCheck()
-	if s.prefs.SoftBrightness != 65 {
-		t.Errorf("a check within the day undid the manual change: %v", s.prefs.SoftBrightness)
+	if s.soft != 65 {
+		t.Errorf("a check within the day undid the manual change: %v", s.soft)
 	}
 
 	now = time.Date(2026, 10, 15, 19, 0, 30, 0, time.Local)
 	s.autoCheck()
-	if s.prefs.SoftBrightness != 30 || s.prefs.Warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
-		t.Errorf("at 19:00: brightness %v warmth %v gamma %v, want the night scene", s.prefs.SoftBrightness, s.prefs.Warmth, *gamma)
+	if s.soft != 30 || s.warmth != 55 || *gamma != [2]float64{0.3, 0.55} {
+		t.Errorf("at 19:00: brightness %v warmth %v gamma %v, want the night scene", s.soft, s.warmth, *gamma)
 	}
 }
 
@@ -406,12 +410,12 @@ func TestCombinedBrightness(t *testing.T) {
 	s := p.s
 	s.hasBrightness, s.brightness = true, 70
 	s.stepBrightness(-60) // from 85 to 25: the backlight at its minimum, and software dimming
-	if s.brightness != 0 || s.prefs.SoftBrightness != 60 || gamma[0] != 0.6 {
-		t.Errorf("at 25: backlight %v, software %v, gamma %v", s.brightness, s.prefs.SoftBrightness, *gamma)
+	if s.brightness != 0 || s.soft != 60 || gamma[0] != 0.6 {
+		t.Errorf("at 25: backlight %v, software %v, gamma %v", s.brightness, s.soft, *gamma)
 	}
 	s.stepBrightness(35) // to 60: the software dimming lifts
-	if s.brightness != 20 || s.prefs.SoftBrightness != 100 {
-		t.Errorf("at 60: backlight %v, software %v", s.brightness, s.prefs.SoftBrightness)
+	if s.brightness != 20 || s.soft != 100 {
+		t.Errorf("at 60: backlight %v, software %v", s.brightness, s.soft)
 	}
 }
 
@@ -555,9 +559,9 @@ func TestHUD(t *testing.T) {
 	}
 
 	s.held = shortcuts[1].id // brightness up, held
-	before := s.prefs.SoftBrightness
+	before := s.soft
 	s.press(shortcuts[1], "Ctrl+Alt+Up")
-	if s.prefs.SoftBrightness != before || len(shown) != 2 {
+	if s.soft != before || len(shown) != 2 {
 		t.Error("a repeated press of held keys stepped again")
 	}
 }

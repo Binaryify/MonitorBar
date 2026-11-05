@@ -3,6 +3,7 @@
 package display
 
 import (
+	"cmp"
 	"errors"
 	"syscall"
 	"unsafe"
@@ -139,11 +140,10 @@ const (
 	dmFieldsForMode      = 0x40000 | 0x80000 | 0x100000 | 0x400000 // bits per pixel, width, height, frequency
 )
 
-// Target returns the external display, the primary one if several are; a
-// laptop's own panel only when no external one is on, as on macOS.
-func Target() Monitor {
-	var best Monitor
-	bestRank := -1
+// Targets returns the external displays, the primary one first; a laptop's
+// own panel only when no external one is on, as on macOS.
+func Targets() []Monitor {
+	var external, builtin []Monitor
 	for i := uint32(0); ; i++ {
 		var dd displayDevice
 		dd.Size = uint32(unsafe.Sizeof(dd))
@@ -154,38 +154,45 @@ func Target() Monitor {
 			continue
 		}
 		m := Monitor{handle: windows.UTF16ToString(dd.DeviceName[:])}
-		m.Name, m.Connection, m.NativeWidth, m.NativeHeight, m.Builtin = targetInfo(m.handle)
+		var path string
+		m.Name, m.Connection, m.NativeWidth, m.NativeHeight, m.Builtin, path = targetInfo(m.handle)
+		m.Key = cmp.Or(path, m.handle) // the monitor's device path stays with it; GDI names follow the order
 		if m.Name == "" {
 			m.Name = monitorString(dd.DeviceName[:])
 		}
-		rank := 0
-		if !m.Builtin {
-			rank += 2
+		list := &external
+		if m.Builtin {
+			list = &builtin
 		}
 		if dd.StateFlags&primaryDevice != 0 {
-			rank++
-		}
-		if rank > bestRank {
-			best, bestRank = m, rank
+			*list = append([]Monitor{m}, *list...)
+		} else {
+			*list = append(*list, m)
 		}
 	}
-	return best
+	if len(external) == 0 && len(builtin) > 0 {
+		external = builtin[:1]
+	}
+	for i := range external {
+		external[i].order = i
+	}
+	return uniqueKeys(external)
 }
 
 // targetInfo finds the monitor's friendly name, cable type, preferred
 // (native) resolution and whether it is a laptop's own panel through the
 // display path whose source is the GDI device. DSR and similar list modes
 // larger than the panel; this one is not.
-func targetInfo(device string) (name, connection string, width, height int, internal bool) {
+func targetInfo(device string) (name, connection string, width, height int, internal bool, path string) {
 	var nPaths, nModes uint32
 	if r, _, _ := procGetDisplayConfigBufferSizes.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&nModes))); r != 0 || nPaths == 0 {
-		return "", "", 0, 0, false
+		return "", "", 0, 0, false, ""
 	}
 	paths := make([]pathInfo, nPaths)
 	modes := make([][64]byte, max(nModes, 1))
 	if r, _, _ := procQueryDisplayConfig.Call(qdcOnlyActivePaths, uintptr(unsafe.Pointer(&nPaths)), uintptr(unsafe.Pointer(&paths[0])),
 		uintptr(unsafe.Pointer(&nModes)), uintptr(unsafe.Pointer(&modes[0])), 0); r != 0 {
-		return "", "", 0, 0, false
+		return "", "", 0, 0, false, ""
 	}
 	for _, p := range paths[:nPaths] {
 		source := sourceDeviceName{Header: deviceInfoHeader{Type: getSourceName, Adapter: p.SourceAdapter, ID: p.SourceID}}
@@ -203,9 +210,9 @@ func targetInfo(device string) (name, connection string, width, height int, inte
 		preferred.Header.Size = uint32(unsafe.Sizeof(preferred))
 		procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&preferred)))
 		return windows.UTF16ToString(target.FriendlyName[:]), outputTechnology(target.OutputTechnology), int(preferred.Width), int(preferred.Height),
-			builtinOutput(target.OutputTechnology)
+			builtinOutput(target.OutputTechnology), windows.UTF16ToString(target.DevicePath[:])
 	}
-	return "", "", 0, 0, false
+	return "", "", 0, 0, false, ""
 }
 
 func outputTechnology(t uint32) string {
@@ -294,7 +301,7 @@ var identity = func() (r gammaRamp) {
 	return r
 }()
 
-var gammaDevice string // the display last dimmed, for RestoreGamma
+var gammaDevices = map[string]bool{} // the displays dimmed, for RestoreGamma
 
 // SetGamma dims and warms the picture through the gamma ramp.
 func (m Monitor) SetGamma(brightness, warmth float64) error {
@@ -303,7 +310,7 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 		return errors.New("display: no device context")
 	}
 	defer procDeleteDC.Call(dc)
-	gammaDevice = m.handle
+	gammaDevices[m.handle] = true
 	gr, gg, gb := gains(brightness, warmth)
 	if neutral(brightness, warmth) {
 		gr, gg, gb = 1, 1, 1
@@ -334,14 +341,13 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 // RestoreGamma puts the identity ramp back; Windows keeps a changed ramp
 // after the app quits.
 func RestoreGamma() {
-	if gammaDevice == "" {
-		return
-	}
-	m := Monitor{handle: gammaDevice}
-	if dc := m.dc(); dc != 0 {
-		ramp := identity
-		procSetDeviceGammaRamp.Call(dc, uintptr(unsafe.Pointer(&ramp)))
-		procDeleteDC.Call(dc)
+	for device := range gammaDevices {
+		m := Monitor{handle: device}
+		if dc := m.dc(); dc != 0 {
+			ramp := identity
+			procSetDeviceGammaRamp.Call(dc, uintptr(unsafe.Pointer(&ramp)))
+			procDeleteDC.Call(dc)
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"math"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -87,7 +88,7 @@ func (s *store) saveScene() {
 	for slices.ContainsFunc(s.prefs.SavedScenes, func(sc savedScene) bool { return sc.ID == fmt.Sprintf("saved-%d", n) }) {
 		n++
 	}
-	sc := savedScene{ID: fmt.Sprintf("saved-%d", n), Name: locales.SceneCustomName(n), Soft: s.prefs.SoftBrightness, Warmth: s.prefs.Warmth}
+	sc := savedScene{ID: fmt.Sprintf("saved-%d", n), Name: locales.SceneCustomName(n), Soft: s.soft, Warmth: s.warmth}
 	if s.hasBrightness {
 		sc.Backlight = new(s.brightness)
 	}
@@ -111,24 +112,18 @@ func (s *store) deleteScene(id string) {
 // fields are read and written on the main thread only: network work runs in
 // goroutines and hands its results back through post.
 type store struct {
+	// The display the panel shows and its fields are of: on and every
+	// make another one it for a while, so actions work on each the same.
+	*output
+	outputs []*output // every display managed, the main one first
+
 	prefs    *settings
 	tracker  *usage.Tracker
 	redraw   func()                                 // asks the open panel for a new frame
-	setGamma func(brightness, warmth float64) error // the monitor's, replaced in tests
+	setGamma func(brightness, warmth float64) error // the display's, replaced in tests
 
-	monitor     display.Monitor
-	modes       []display.Mode
-	current     display.Mode
-	hasCurrent  bool
-	switchingTo string // the mode the LAN remote is switching the monitor to
-
-	link      *mitv.Link // the display's LAN remote, nil until found
 	detecting bool
-	inputs    []mitv.Source
-	input     int // the input chosen in the app, 0 before any
-	volume    float64
-	hasVolume bool
-	unmuted   float64 // the volume to go back to from mute, 0 when not muted
+	lan       []lanMonitor // the HyperOS monitors found on the LAN
 
 	usage         []usage.Day
 	launchAtLogin bool
@@ -148,6 +143,38 @@ type store struct {
 	notice string
 	dirty  bool // prefs changed since the last save
 
+	// The day and night start times as the time inputs edit them.
+	dayStart, nightStart time.Time
+	now                  func() time.Time // the clock, fixed in tests
+
+	// Updates, for builds that can update themselves.
+	canUpdate  bool
+	update     *mygo.Update // a newer version, nil when up to date
+	installing bool
+	progress   int // percent downloaded
+
+	hasBuiltin bool // a MacBook's own display, to follow
+}
+
+// output is a display and what reaches it.
+type output struct {
+	monitor     display.Monitor
+	modes       []display.Mode
+	current     display.Mode
+	hasCurrent  bool
+	switchingTo string // the mode the LAN remote is switching the monitor to
+
+	// The software picture, through the gamma table.
+	soft   float64 // gamma %, 20...100
+	warmth float64 // 0...100
+
+	link      *mitv.Link // the display's LAN remote, nil until found
+	inputs    []mitv.Source
+	input     int // the input chosen in the app, 0 before any
+	volume    float64
+	hasVolume bool
+	unmuted   float64 // the volume to go back to from mute, 0 when not muted
+
 	volumeTarget atomic.Int64
 	deviceVolume int // the display's volume as last known
 	chasing      bool
@@ -163,22 +190,36 @@ type store struct {
 	controls      []control
 	maxima        map[byte]int // the range of each VCP code
 
-	// The day and night start times as the time inputs edit them.
-	dayStart, nightStart time.Time
-	now                  func() time.Time // the clock, fixed in tests
-
-	// Updates, for builds that can update themselves.
-	canUpdate  bool
-	update     *mygo.Update // a newer version, nil when up to date
-	installing bool
-	progress   int // percent downloaded
-
-	// Following the built-in display: whether there is one, its brightness
-	// last seen (-1 before any), and the backlight being eased toward.
-	hasBuiltin   bool
+	// Following the built-in display: its brightness last seen (-1 before
+	// any), and the backlight being eased toward.
 	lastBuiltin  float64
 	followTarget float64
 	easing       bool
+}
+
+// on runs fn with o as the display the store's fields are of.
+func (s *store) on(o *output, fn func()) {
+	shown := s.output
+	s.output = o
+	defer func() { s.output = shown }()
+	fn()
+}
+
+// every runs fn on each display.
+func (s *store) every(fn func()) {
+	for _, o := range s.outputs {
+		s.on(o, fn)
+	}
+}
+
+// each runs fn on the display shown, or on every one while they are kept
+// in sync (#14).
+func (s *store) each(fn func()) {
+	if s.prefs.SyncDisplays {
+		s.every(fn)
+	} else {
+		fn()
+	}
 }
 
 // control is a picture setting the monitor offers over DDC/CI.
@@ -207,7 +248,6 @@ func newStore() *store {
 		now:            time.Now,
 		launchAtLogin:  mygo.App.OpenAtLogin(),
 		canUpdate:      mygo.Updater.Enabled(),
-		lastBuiltin:    -1,
 		registered:     map[string]string{},
 		soundToDisplay: display.SoundToDisplay,
 		keyHeld:        keystate.Held,
@@ -216,7 +256,7 @@ func newStore() *store {
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()
 	s.setGamma = func(b, w float64) error { return s.monitor.SetGamma(b, w) }
-	s.applyGamma()
+	s.every(s.applyGamma)
 	s.usage = s.tracker.Recent(7)
 	return s
 }
@@ -232,12 +272,12 @@ func (s *store) post(fn func()) {
 // MARK: Picture (software, through the gamma table)
 
 func (s *store) setSoftBrightness(percent float64) {
-	s.prefs.SoftBrightness = percent
+	s.soft = percent
 	s.applyGamma()
 }
 
 func (s *store) setWarmth(percent float64) {
-	s.prefs.Warmth = percent
+	s.warmth = percent
 	s.applyGamma()
 }
 
@@ -248,13 +288,13 @@ func (s *store) apply(sc scene) {
 	if s.hasBrightness && backlight >= 0 {
 		s.setBrightness(backlight)
 	}
-	s.prefs.SoftBrightness, s.prefs.Warmth = soft, sc.warmth
+	s.soft, s.warmth = soft, sc.warmth
 	s.applyGamma()
 }
 
 func (s *store) isActive(sc scene) bool {
 	backlight, soft := sc.levels(s.hasBrightness)
-	return math.Abs(s.prefs.SoftBrightness-soft) < 1 && math.Abs(s.prefs.Warmth-sc.warmth) < 1 &&
+	return math.Abs(s.soft-soft) < 1 && math.Abs(s.warmth-sc.warmth) < 1 &&
 		(!s.hasBrightness || backlight < 0 || math.Abs(s.brightness-backlight) < 1)
 }
 
@@ -284,7 +324,19 @@ func split(combined float64) (hardware, soft float64) {
 	return 0, softMin + max(combined, 0)/switchover*(100-softMin)
 }
 
-func (s *store) combinedBrightness() float64 { return combine(s.brightness, s.prefs.SoftBrightness) }
+// setLevel sets the brightness the overview shows: on the combined scale
+// where DDC/CI reaches the backlight, else the software dimming. Displays
+// kept in sync take the same level, whichever scale each has.
+func (s *store) setLevel(level float64) {
+	if s.hasBrightness {
+		s.setCombined(level)
+		return
+	}
+	s.soft = min(max(level, softMin), 100)
+	s.applyGamma()
+}
+
+func (s *store) combinedBrightness() float64 { return combine(s.brightness, s.soft) }
 
 // setCombined sets the backlight and the software dimming of a combined
 // brightness, writing only what changed: DDC/CI is slow.
@@ -293,8 +345,8 @@ func (s *store) setCombined(combined float64) {
 	if hardware != s.brightness {
 		s.setBrightness(hardware)
 	}
-	if soft != s.prefs.SoftBrightness {
-		s.prefs.SoftBrightness = soft
+	if soft != s.soft {
+		s.soft = soft
 		s.applyGamma()
 	}
 }
@@ -306,7 +358,7 @@ func (s *store) stepBrightness(delta float64) {
 		s.setCombined(min(max(s.combinedBrightness()+delta, 0), 100))
 		return
 	}
-	s.prefs.SoftBrightness = min(max(s.prefs.SoftBrightness+delta, softMin), 100)
+	s.soft = min(max(s.soft+delta, softMin), 100)
 	s.applyGamma()
 }
 
@@ -316,17 +368,17 @@ func (s *store) effectiveBrightness() float64 {
 	if s.hasBrightness {
 		return s.brightness
 	}
-	return s.prefs.SoftBrightness
+	return s.soft
 }
 
 func (s *store) resetSoftware() {
-	s.prefs.SoftBrightness, s.prefs.Warmth = 100, 0
+	s.soft, s.warmth = 100, 0
 	s.applyGamma()
 }
 
 func (s *store) applyGamma() {
 	s.dirty = true
-	err := s.setGamma(s.prefs.SoftBrightness/100, s.prefs.Warmth/100)
+	err := s.setGamma(s.soft/100, s.warmth/100)
 	switch {
 	case errors.Is(err, display.ErrGammaLimited):
 		s.notice = locales.NoticeGammaLimited()
@@ -355,48 +407,167 @@ func (s *store) inputChannel() string {
 	return "DDC/CI"
 }
 
-// connect finds the display on the LAN: the host found last time first,
-// then a scan.
+// lanMonitor is a HyperOS monitor found on the LAN, as it was then.
+type lanMonitor struct {
+	link      *mitv.Link
+	name      string
+	sources   []mitv.Source
+	volume    int
+	hasVolume bool
+}
+
+// connect finds the monitors on the LAN: the hosts paired last time, else
+// a scan, then pairs them with the displays.
 func (s *store) connect() {
 	if s.detecting {
 		return
 	}
 	s.detecting = true
-	cached := s.prefs.NetworkHost
+	var saved []string
+	for _, o := range s.outputs {
+		if host := s.savedHost(o); host != "" && host != noLink && !slices.Contains(saved, host) {
+			saved = append(saved, host)
+		}
+	}
+	displays := len(s.outputs)
 	go func() {
-		link := mitv.New(cached)
-		// The host found last time must still be a monitor: addresses move.
-		if cached == "" || !link.IsMonitor() {
-			link = nil
-			if host, err := mitv.Discover(); err == nil {
-				link = mitv.New(host)
+		// A host paired last time must still be a monitor: addresses move.
+		hosts := slices.DeleteFunc(saved, func(h string) bool { return !mitv.New(h).IsMonitor() })
+		if len(hosts) < displays {
+			if found, err := mitv.Discover(); err == nil {
+				hosts = found
 			}
 		}
-		var sources []mitv.Source
-		volume, volumeErr := 0, error(nil)
-		if link != nil {
-			var err error
-			if sources, err = link.Sources(); err != nil || len(sources) == 0 {
-				link = nil
-			} else {
-				volume, volumeErr = link.Volume()
+		var found []lanMonitor
+		for _, host := range hosts {
+			link := mitv.New(host)
+			sources, err := link.Sources()
+			if err != nil || len(sources) == 0 {
+				continue
 			}
+			slices.SortFunc(sources, func(a, b mitv.Source) int { return a.ID - b.ID })
+			name, _ := link.DeviceName()
+			volume, volumeErr := link.Volume()
+			found = append(found, lanMonitor{link: link, name: name, sources: sources, volume: volume, hasVolume: volumeErr == nil})
 		}
 		s.post(func() {
 			s.detecting = false
-			s.link = link
-			if link == nil {
-				s.inputs, s.hasVolume = nil, s.ddcVolume // DDC/CI may still have volume
-				return
-			}
-			s.prefs.NetworkHost, s.dirty = link.Host, true
-			slices.SortFunc(sources, func(a, b mitv.Source) int { return a.ID - b.ID })
-			s.inputs = sources
-			if volumeErr == nil {
-				s.deviceVolume, s.volume, s.hasVolume = volume, float64(volume), true
-			}
+			s.lan = found
+			s.pairLinks()
 		})
 	}()
+}
+
+// savedHost is the LAN remote paired with a display last time: the one
+// MonitorBar used before it managed several displays, for the first.
+func (s *store) savedHost(o *output) string {
+	if d := s.prefs.Displays[o.monitor.Key]; d != nil && d.NetworkHost != "" {
+		return d.NetworkHost
+	}
+	if len(s.outputs) > 0 && o == s.outputs[0] {
+		return s.prefs.NetworkHost
+	}
+	return ""
+}
+
+// pairLinks pairs the monitors found on the LAN with the displays: as last
+// time, then the others in turn, Xiaomi's displays first. Nothing tells two
+// alike apart, so the user may pair them anew (choseLink).
+func (s *store) pairLinks() {
+	byHost := map[string]*lanMonitor{}
+	for i := range s.lan {
+		byHost[s.lan[i].link.Host] = &s.lan[i]
+	}
+	var unpaired []*output
+	for _, o := range s.outputs {
+		host := s.savedHost(o)
+		if lm := byHost[host]; lm != nil {
+			s.on(o, func() { s.pair(lm) })
+			delete(byHost, host)
+			continue
+		}
+		s.on(o, func() { s.pair(nil) })
+		if host != noLink {
+			unpaired = append(unpaired, o)
+		}
+	}
+	slices.SortStableFunc(unpaired, func(a, b *output) int { return cmp.Compare(b2i(!xiaomi(a.monitor.Name)), b2i(!xiaomi(b.monitor.Name))) })
+	for _, o := range unpaired {
+		for i := range s.lan {
+			if lm := &s.lan[i]; byHost[lm.link.Host] != nil {
+				s.on(o, func() { s.pair(lm) })
+				delete(byHost, lm.link.Host)
+				break
+			}
+		}
+	}
+}
+
+// xiaomi tells a display by Xiaomi from its name, the likeliest to have the
+// LAN remote.
+func xiaomi(name string) bool {
+	name = strings.ToLower(name)
+	return strings.Contains(name, "xiaomi") || strings.Contains(name, "redmi") || strings.HasPrefix(name, "mi ")
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// pair makes lm the LAN remote of the display, nil for none.
+func (s *store) pair(lm *lanMonitor) {
+	if lm == nil {
+		s.link, s.inputs, s.hasVolume = nil, nil, s.ddcVolume // DDC/CI may still have volume
+		return
+	}
+	s.link, s.inputs = lm.link, lm.sources
+	if lm.hasVolume {
+		s.deviceVolume, s.volume, s.hasVolume = lm.volume, float64(lm.volume), true
+	}
+	s.prefs.display(s.monitor.Key).NetworkHost, s.dirty = lm.link.Host, true
+	if len(s.outputs) > 0 && s.output == s.outputs[0] {
+		s.prefs.NetworkHost = lm.link.Host
+	}
+}
+
+// chooseLink pairs the display shown with the LAN monitor of host, "" for
+// none. The display that had it takes the one this display had.
+func (s *store) chooseLink(host string) {
+	var mine string
+	if s.link != nil {
+		mine = s.link.Host
+	}
+	if host == mine {
+		return
+	}
+	shown := s.output
+	for _, o := range s.outputs {
+		if o != shown && o.link != nil && o.link.Host == host {
+			s.on(o, func() {
+				s.pair(s.lanByHost(mine))
+				if mine == "" {
+					s.prefs.display(s.monitor.Key).NetworkHost = noLink
+				}
+			})
+		}
+	}
+	s.pair(s.lanByHost(host))
+	if host == "" {
+		s.prefs.display(s.monitor.Key).NetworkHost, s.dirty = noLink, true
+	}
+	s.readVolume()
+}
+
+func (s *store) lanByHost(host string) *lanMonitor {
+	for i := range s.lan {
+		if s.lan[i].link.Host == host {
+			return &s.lan[i]
+		}
+	}
+	return nil
 }
 
 func (s *store) selectInput(src mitv.Source) {
@@ -428,12 +599,19 @@ func (s *store) toggleMute() {
 	if !s.hasVolume {
 		return
 	}
-	if s.volume > 0 {
+	mute := s.volume > 0 // as the display shown is, on all in sync
+	s.each(func() { s.setMuted(mute) })
+}
+
+func (s *store) setMuted(mute bool) {
+	switch {
+	case !s.hasVolume:
+	case mute && s.volume > 0:
 		s.unmuted = s.volume
 		s.setVolume(0)
-		return
+	case !mute && s.volume == 0:
+		s.setVolume(cmp.Or(s.unmuted, defaultUnmuted))
 	}
-	s.setVolume(cmp.Or(s.unmuted, defaultUnmuted))
 }
 
 const defaultUnmuted = 20 // the volume unmuting goes to, when it was muted elsewhere
@@ -457,10 +635,10 @@ func (s *store) chaseVolume() {
 		return
 	}
 	s.chasing = true
-	link, actual := s.link, s.deviceVolume
+	o, link, actual := s.output, s.link, s.deviceVolume
 	go func() {
 		failed := false
-		for target := int(s.volumeTarget.Load()); target != actual; target = int(s.volumeTarget.Load()) {
+		for target := int(o.volumeTarget.Load()); target != actual; target = int(o.volumeTarget.Load()) {
 			key, step := "volumeup", 1
 			if target < actual {
 				key, step = "volumedown", -1
@@ -472,22 +650,24 @@ func (s *store) chaseVolume() {
 			actual += step
 		}
 		s.post(func() {
-			s.chasing = false
-			s.deviceVolume = actual
-			switch {
-			case failed:
-				s.notice = locales.NoticeVolumeFailed()
-			case int(s.volumeTarget.Load()) != actual:
-				s.chaseVolume() // the slider moved while the last step was sent
-			default:
-				s.readVolume()
-			}
+			s.on(o, func() {
+				s.chasing = false
+				s.deviceVolume = actual
+				switch {
+				case failed:
+					s.notice = locales.NoticeVolumeFailed()
+				case int(s.volumeTarget.Load()) != actual:
+					s.chaseVolume() // the slider moved while the last step was sent
+				default:
+					s.readVolume()
+				}
+			})
 		})
 	}()
 }
 
 func (s *store) readVolume() {
-	link := s.link
+	o, link := s.output, s.link
 	if link == nil {
 		return
 	}
@@ -497,9 +677,12 @@ func (s *store) readVolume() {
 			return
 		}
 		s.post(func() {
-			s.deviceVolume, s.hasVolume = v, true
-			if !s.chasing {
-				s.volume = float64(v)
+			if o.link != link {
+				return // paired anew meanwhile
+			}
+			o.deviceVolume, o.hasVolume = v, true
+			if !o.chasing {
+				o.volume = float64(v)
 			}
 		})
 	}()
@@ -518,7 +701,7 @@ func (s *store) probeDDC() {
 		s.ddc = nil
 		go old.Close()
 	}
-	m := s.monitor
+	o, m := s.output, s.monitor
 	go func() {
 		d, err := m.OpenDDC()
 		var r ddcReading
@@ -526,9 +709,17 @@ func (s *store) probeDDC() {
 			r = readDDC(d, m.Name, true)
 		}
 		s.post(func() {
-			s.probingDDC = false
-			s.ddc = d
-			s.applyDDC(r)
+			if !slices.Contains(s.outputs, o) { // unplugged meanwhile
+				if d != nil {
+					go d.Close()
+				}
+				return
+			}
+			s.on(o, func() {
+				s.probingDDC = false
+				s.ddc = d
+				s.applyDDC(r)
+			})
 		})
 	}()
 }
@@ -626,12 +817,12 @@ func (s *store) refreshDDC() {
 	if d == nil || s.probingDDC {
 		return
 	}
-	model := s.monitor.Name
+	o, model := s.output, s.monitor.Name
 	go func() {
 		r := readDDC(d, model, false)
 		s.post(func() {
-			if s.ddc == d {
-				s.applyDDC(r)
+			if o.ddc == d {
+				s.on(o, func() { s.applyDDC(r) })
 			}
 		})
 	}()
@@ -677,7 +868,8 @@ func (s *store) autoCheck() {
 	if period == schedule.Night {
 		id = s.prefs.NightScene
 	}
-	s.apply(s.sceneByID(id))
+	sc := s.sceneByID(id)
+	s.every(func() { s.apply(sc) }) // every display, kept in sync or not
 	s.prefs.AutoPeriod, s.dirty = string(period), true
 }
 
@@ -737,8 +929,8 @@ func (s *store) followTick(builtin func() (float64, bool)) {
 	if !s.easing {
 		return
 	}
-	if s.prefs.SoftBrightness < 100 { // following sets the backlight alone, with no software dimming
-		s.prefs.SoftBrightness = 100
+	if s.soft < 100 { // following sets the backlight alone, with no software dimming
+		s.soft = 100
 		s.applyGamma()
 	}
 	next := easeToward(s.brightness, s.followTarget)
@@ -754,7 +946,8 @@ func (s *store) followTick(builtin func() (float64, bool)) {
 
 // followChanged restarts following from the built-in display's brightness.
 func (s *store) followChanged() {
-	s.lastBuiltin, s.dirty = -1, true
+	s.every(func() { s.lastBuiltin = -1 })
+	s.dirty = true
 }
 
 // followTarget maps the built-in display's brightness, 0...1, into the
@@ -866,15 +1059,16 @@ func (s *store) setCompetitive(on bool) {
 		s.switchingTo = "1080p 320Hz"
 	}
 	s.notice = ""
+	o := s.output
 	go func() {
 		err := link.SetCompetitive(on)
 		s.post(func() {
 			if err != nil {
 				s.notice = locales.NoticeSwitchFailed()
 			} else {
-				s.notice = locales.NoticeSwitching(s.switchingTo)
+				s.notice = locales.NoticeSwitching(o.switchingTo)
 			}
-			s.switchingTo = ""
+			o.switchingTo = ""
 		})
 	}()
 }
@@ -883,22 +1077,68 @@ func (s *store) sleepDisplay() { _ = display.SleepNow() }
 
 // MARK: Lifecycle
 
+// refreshDisplay reads the displays anew. Those still there keep their
+// state; the panel stays on the one it showed while it is there.
 func (s *store) refreshDisplay() {
 	_, s.hasBuiltin = display.BuiltinBrightness()
-	s.monitor = display.Target()
-	s.modes = s.monitor.Modes()
-	s.current, s.hasCurrent = s.monitor.CurrentMode()
+	monitors := display.Targets()
+	if len(monitors) == 0 {
+		monitors = []display.Monitor{{}} // the panel still shows its software controls
+	}
+	outputs := make([]*output, 0, len(monitors))
+	for _, m := range monitors {
+		i := slices.IndexFunc(s.outputs, func(o *output) bool { return o.monitor.Key == m.Key })
+		o := &output{lastBuiltin: -1}
+		if i >= 0 {
+			o = s.outputs[i]
+		} else {
+			d := s.prefs.display(m.Key)
+			o.soft, o.warmth = d.SoftBrightness, d.Warmth
+		}
+		o.monitor, o.modes = m, m.Modes()
+		o.current, o.hasCurrent = m.CurrentMode()
+		outputs = append(outputs, o)
+	}
+	for _, o := range s.outputs {
+		if !slices.Contains(outputs, o) && o.ddc != nil {
+			go o.ddc.Close()
+		}
+	}
+	s.outputs = outputs
+	s.output = outputs[0]
+	for _, o := range outputs {
+		if o.monitor.Key == s.prefs.Display {
+			s.output = o
+		}
+	}
 }
 
-// displaysChanged follows plugging, mode changes and wake: the gamma table
-// was reset, so capture it again and reapply.
+// showDisplay makes o the display the panel shows.
+func (s *store) showDisplay(o *output) {
+	s.output, s.notice = o, ""
+	s.prefs.Display, s.dirty = o.monitor.Key, true
+}
+
+// displaysChanged follows plugging, mode changes and wake: the gamma tables
+// were reset, so capture them again and reapply.
 func (s *store) displaysChanged() {
-	previous := s.monitor
+	previous := map[*output]display.Monitor{}
+	for _, o := range s.outputs {
+		previous[o] = o.monitor
+	}
 	s.refreshDisplay()
 	display.ResetGammaBase()
-	s.applyGamma()
-	if s.monitor != previous {
-		s.probeDDC()
+	s.every(s.applyGamma)
+	added := false
+	for _, o := range s.outputs {
+		m, ok := previous[o]
+		if !ok || m != o.monitor {
+			s.on(o, s.probeDDC)
+		}
+		added = added || !ok
+	}
+	if added {
+		s.pairLinks()
 	}
 }
 
@@ -906,18 +1146,18 @@ func (s *store) panelOpened() {
 	s.usage = s.tracker.Recent(7)
 	// Retry here too: the launch attempt may have raced the network
 	// permission prompt.
-	if s.link == nil {
+	if s.link == nil && s.savedHost(s.output) != noLink {
 		s.connect()
 	} else {
-		s.readVolume()
+		s.every(s.readVolume)
 	}
-	s.refreshDDC()
+	s.every(s.refreshDDC)
 }
 
 // detect looks for every control channel again.
 func (s *store) detect() {
 	s.connect()
-	s.probeDDC()
+	s.every(s.probeDDC)
 }
 
 // detectingAny reports a channel still being looked for.
@@ -925,7 +1165,8 @@ func (s *store) detectingAny() bool { return s.detecting || s.probingDDC }
 
 func (s *store) recordUsage() {
 	s.autoCheck()
-	s.tracker.Record(!s.monitor.Asleep(), time.Duration(display.IdleSeconds()*float64(time.Second)))
+	awake := slices.ContainsFunc(s.outputs, func(o *output) bool { return !o.monitor.Asleep() })
+	s.tracker.Record(awake, time.Duration(display.IdleSeconds()*float64(time.Second)))
 	s.usage = s.tracker.Recent(7)
 	s.save()
 }
@@ -938,8 +1179,16 @@ func (s *store) toggleLaunchAtLogin() {
 }
 
 func (s *store) save() {
-	if s.dirty {
-		s.prefs.save()
-		s.dirty = false
+	if !s.dirty {
+		return
 	}
+	for i, o := range s.outputs {
+		d := s.prefs.display(o.monitor.Key)
+		d.SoftBrightness, d.Warmth = o.soft, o.warmth
+		if i == 0 { // as before each display had its own
+			s.prefs.SoftBrightness, s.prefs.Warmth = o.soft, o.warmth
+		}
+	}
+	s.prefs.save()
+	s.dirty = false
 }

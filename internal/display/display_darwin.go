@@ -3,8 +3,11 @@
 package display
 
 import (
+	"cmp"
 	"errors"
+	"fmt"
 	"os/exec"
+	"slices"
 	"sync"
 	"unsafe"
 
@@ -142,20 +145,43 @@ func symbolValue(lib uintptr, name string) uintptr {
 	return **(**uintptr)(unsafe.Pointer(&addr))
 }
 
-// Target returns the first external display, or the main one.
-func Target() Monitor {
+// Targets returns the external displays, the main one first, or the main
+// display alone when none is external.
+func Targets() []Monitor {
 	load()
 	var ids [16]uint32
 	var n uint32
 	cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n)
-	id := cgMainDisplayID()
+	main := cgMainDisplayID()
+	var external []uint32
 	for _, d := range ids[:n] {
 		if cgDisplayIsBuiltin(d) == 0 {
-			id = d
-			break
+			external = append(external, d)
 		}
 	}
-	return Monitor{Name: screenName(id), Connection: connection(), Builtin: cgDisplayIsBuiltin(id) != 0, handle: id}
+	slices.SortStableFunc(external, func(a, b uint32) int { return cmp.Compare(b2i(b == main), b2i(a == main)) })
+	if len(external) == 0 {
+		external = []uint32{main}
+	}
+	// IOKit tells one cable type for all: it is shown only when it can be
+	// only one display's.
+	cable := ""
+	if len(external) == 1 {
+		cable = connection()
+	}
+	ms := make([]Monitor, len(external))
+	for i, id := range external {
+		ms[i] = Monitor{Key: fmt.Sprintf("%x:%x:%x", cgDisplayVendorNumber(id), cgDisplayModelNumber(id), cgDisplaySerialNumber(id)),
+			Name: screenName(id), Connection: cable, Builtin: cgDisplayIsBuiltin(id) != 0, order: i, handle: id}
+	}
+	return uniqueKeys(ms)
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // screenName asks NSScreen for the display's localized name.
@@ -250,32 +276,46 @@ func (m Monitor) Apply(mode Mode) error {
 	return nil
 }
 
-var gammaBase [3][]float32 // the ColorSync curve, captured before the first change
+// gammaBase holds each display's ColorSync curve, captured for all at once
+// before the first change: capturing restores every display's curve.
+var gammaBase map[uint32][3][]float32
 
 // SetGamma dims and warms the picture through the gamma table. macOS resets
 // it when the app quits.
 func (m Monitor) SetGamma(brightness, warmth float64) error {
 	load()
-	if neutral(brightness, warmth) {
-		RestoreGamma()
-		return nil
-	}
-	if gammaBase[0] == nil {
+	if gammaBase == nil {
 		cgDisplayRestoreColorSyncSettings()
-		capacity := cgDisplayGammaTableCapacity(m.handle)
-		r, g, b := make([]float32, capacity), make([]float32, capacity), make([]float32, capacity)
+		gammaBase = map[uint32][3][]float32{}
+		var ids [16]uint32
 		var n uint32
-		cgGetDisplayTransferByTable(m.handle, capacity, &r[0], &g[0], &b[0], &n)
-		gammaBase = [3][]float32{r[:n], g[:n], b[:n]}
+		cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n)
+		for _, id := range ids[:n] {
+			capacity := cgDisplayGammaTableCapacity(id)
+			if capacity == 0 {
+				continue
+			}
+			r, g, b := make([]float32, capacity), make([]float32, capacity), make([]float32, capacity)
+			var count uint32
+			cgGetDisplayTransferByTable(id, capacity, &r[0], &g[0], &b[0], &count)
+			gammaBase[id] = [3][]float32{r[:count], g[:count], b[:count]}
+		}
 	}
-	if len(gammaBase[0]) == 0 {
+	base := gammaBase[m.handle]
+	if len(base[0]) == 0 {
+		if neutral(brightness, warmth) {
+			return nil
+		}
 		return errors.New("display: no gamma table")
 	}
 	gr, gg, gb := gains(brightness, warmth)
+	if neutral(brightness, warmth) {
+		gr, gg, gb = 1, 1, 1 // the display's own curve, leaving the others'
+	}
 	scaled := [3][]float32{}
 	for i, gain := range []float64{gr, gg, gb} {
-		scaled[i] = make([]float32, len(gammaBase[i]))
-		for j, v := range gammaBase[i] {
+		scaled[i] = make([]float32, len(base[i]))
+		for j, v := range base[i] {
 			scaled[i][j] = v * float32(gain)
 		}
 	}
@@ -285,14 +325,14 @@ func (m Monitor) SetGamma(brightness, warmth float64) error {
 	return nil
 }
 
-// RestoreGamma puts the ColorSync curves back.
+// RestoreGamma puts the ColorSync curves of every display back.
 func RestoreGamma() {
 	load()
 	cgDisplayRestoreColorSyncSettings()
 }
 
-// ResetGammaBase forgets the captured curve, after the displays changed.
-func ResetGammaBase() { gammaBase = [3][]float32{} }
+// ResetGammaBase forgets the captured curves, after the displays changed.
+func ResetGammaBase() { gammaBase = nil }
 
 func (m Monitor) Asleep() bool {
 	load()

@@ -39,10 +39,10 @@ const (
 // The keys going down come first, as the left one of two neighbouring keys,
 // such as F1 and F2, is the one recorded first.
 var shortcuts = []shortcut{
-	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.stepBrightness(-shortcutStep) }, hudBrightness, true},
-	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.stepBrightness(shortcutStep) }, hudBrightness, true},
-	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.stepVolume(-shortcutStep) }, hudVolume, true},
-	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.stepVolume(shortcutStep) }, hudVolume, true},
+	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.each(func() { s.stepBrightness(-shortcutStep) }) }, hudBrightness, true},
+	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.each(func() { s.stepBrightness(shortcutStep) }) }, hudBrightness, true},
+	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.each(func() { s.stepVolume(-shortcutStep) }) }, hudVolume, true},
+	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.each(func() { s.stepVolume(shortcutStep) }) }, hudVolume, true},
 	{"volumeMute", locales.ShortcutVolumeMute, "", func(s *store) { s.toggleMute() }, hudVolume, false},
 }
 
@@ -50,7 +50,7 @@ var shortcuts = []shortcut{
 // by the input's id, so its keys stay while the display is away.
 func inputShortcut(src mitv.Source) shortcut {
 	return shortcut{id: inputShortcutPrefix + strconv.Itoa(src.ID), title: func() string { return locales.ShortcutInput(src.Name) },
-		run: func(s *store) { s.switchInput(src.ID) }}
+		run: func(s *store) { s.each(func() { s.switchInput(src.ID) }) }}
 }
 
 const inputShortcutPrefix = "input-"

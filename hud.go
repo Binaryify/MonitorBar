@@ -46,7 +46,7 @@ func (s *store) hudLevel(kind hudKind) (iconName, title string, percent float64)
 	if s.hasBrightness {
 		return "sun", locales.Brightness(), s.combinedBrightness()
 	}
-	return "sun", locales.Brightness(), s.prefs.SoftBrightness
+	return "sun", locales.Brightness(), s.soft
 }
 
 // showHUD shows the level a key set under the menu bar icon (by the

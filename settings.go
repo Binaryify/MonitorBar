@@ -8,11 +8,19 @@ import (
 
 // settings are the choices kept between launches, in a JSON file.
 type settings struct {
+	// The first display's picture and LAN remote, as before each display
+	// had its own: the defaults of a display seen for the first time.
 	SoftBrightness float64 `json:"softBrightness"` // gamma %, 20...100
 	Warmth         float64 `json:"warmth"`         // 0...100
+	NetworkHost    string  `json:"networkHost"`
 	Tab            string  `json:"tab"`
-	NetworkHost    string  `json:"networkHost"` // the display found last time
 	LaunchedBefore bool    `json:"launchedBefore"`
+
+	// Each display's own, by its key (#14).
+	Displays map[string]*displaySettings `json:"displays,omitempty"`
+	Display  string                      `json:"display,omitempty"` // the one the panel shows
+	// Whether the picture, volume and input change on every display at once.
+	SyncDisplays bool `json:"syncDisplays"`
 
 	// Switching to the day and night scenes at set times.
 	AutoSwitch bool   `json:"autoSwitch"`
@@ -40,6 +48,30 @@ type settings struct {
 	// The language chosen in the panel, "" to follow the system's.
 	Language string `json:"language,omitempty"`
 	path     string
+}
+
+// displaySettings are a display's picture and the LAN remote paired with it.
+type displaySettings struct {
+	SoftBrightness float64 `json:"softBrightness"`
+	Warmth         float64 `json:"warmth"`
+	NetworkHost    string  `json:"networkHost,omitempty"` // noLink when the user chose none
+}
+
+// noLink pairs a display with no LAN remote, by the user's choice.
+const noLink = "none"
+
+// display is the settings of the display of key, made on first use from the
+// defaults.
+func (s *settings) display(key string) *displaySettings {
+	d := s.Displays[key]
+	if d == nil {
+		if s.Displays == nil {
+			s.Displays = map[string]*displaySettings{}
+		}
+		d = &displaySettings{SoftBrightness: s.SoftBrightness, Warmth: s.Warmth}
+		s.Displays[key] = d
+	}
+	return d
 }
 
 // savedScene is the picture as it was when the user saved it.

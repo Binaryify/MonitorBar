@@ -1,6 +1,6 @@
-// Package display reads and changes the target monitor through the
-// operating system: its modes, its gamma table and whether it is lit.
-// display_darwin.go and display_windows.go implement Target and the
+// Package display reads and changes the monitors through the operating
+// system: their modes, gamma tables and whether they are lit.
+// display_darwin.go and display_windows.go implement Targets and the
 // Monitor methods.
 package display
 
@@ -14,15 +14,32 @@ import (
 // milder one was applied: Windows keeps gamma ramps near the identity.
 var ErrGammaLimited = errors.New("display: the system limited the dimming")
 
-// Monitor is the external display the app manages.
+// Monitor is a display the app manages.
 type Monitor struct {
+	// Key tells the display from the others across launches: the same
+	// for it whichever port, order or system id it has now.
+	Key        string
 	Name       string // e.g. "Mi Monitor"
 	Connection string // e.g. "HDMI", or "" when unknown
 	// Native is the panel's own resolution where the system tells it
 	// (Windows, from the EDID), zero otherwise.
 	NativeWidth, NativeHeight int
 	Builtin                   bool // a MacBook's own display, when no external one is on
+	order                     int  // its place among the displays, telling identical ones apart
 	handle                    handle
+}
+
+// uniqueKeys suffixes the keys two displays share, as two monitors of a
+// model whose EDID has no serial number do, in the order they come.
+func uniqueKeys(ms []Monitor) []Monitor {
+	seen := map[string]int{}
+	for i := range ms {
+		key := ms[i].Key
+		if seen[key]++; seen[key] > 1 {
+			ms[i].Key = fmt.Sprintf("%s#%d", key, seen[key])
+		}
+	}
+	return ms
 }
 
 // NativeSize is the monitor's own resolution: what the system reports, or

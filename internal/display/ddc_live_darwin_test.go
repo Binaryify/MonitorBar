@@ -15,7 +15,7 @@ func TestLiveInputSwitch(t *testing.T) {
 	if os.Getenv("MONITORBAR_LIVE_DDC") == "" {
 		t.Skip("set MONITORBAR_LIVE_DDC=1 to talk to the monitor")
 	}
-	m := Target()
+	m := Targets()[0]
 	t.Logf("monitor: %q, connection %q", m.Name, m.Connection)
 	d, err := m.OpenDDC()
 	if err != nil {

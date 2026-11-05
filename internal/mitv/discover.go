@@ -3,6 +3,7 @@ package mitv
 import (
 	"errors"
 	"net"
+	"net/netip"
 	"slices"
 	"strings"
 	"sync"
@@ -36,15 +37,15 @@ func hasMonitorInput(sources []Source) bool {
 	return slices.ContainsFunc(sources, func(s Source) bool { return s.ID == SourceDP || s.ID == SourceUSBC })
 }
 
-// Discover returns the IPv4 address of a HyperOS monitor by probing every
-// address of the local /24 subnets for the remote API. (The device answers
-// mDNS only by multicast to port 5353, which the system's own responder
-// holds, so a scan is the portable way.)
-func Discover() (string, error) {
+// Discover returns the IPv4 addresses of the HyperOS monitors, in address
+// order, by probing every address of the local /24 subnets for the remote
+// API. (The device answers mDNS only by multicast to port 5353, which the
+// system's own responder holds, so a scan is the portable way.)
+func Discover() ([]string, error) {
 	var (
-		mu      sync.Mutex
-		monitor string
-		wg      sync.WaitGroup
+		mu       sync.Mutex
+		monitors []string
+		wg       sync.WaitGroup
 	)
 	for _, host := range candidates() {
 		wg.Add(1)
@@ -57,16 +58,19 @@ func Discover() (string, error) {
 			conn.Close()
 			if New(host).IsMonitor() {
 				mu.Lock()
-				monitor = host
+				monitors = append(monitors, host)
 				mu.Unlock()
 			}
 		}()
 	}
 	wg.Wait()
-	if monitor == "" {
-		return "", ErrNotFound
+	if len(monitors) == 0 {
+		return nil, ErrNotFound
 	}
-	return monitor, nil
+	slices.SortFunc(monitors, func(a, b string) int {
+		return netip.MustParseAddr(a).Compare(netip.MustParseAddr(b))
+	})
+	return monitors, nil
 }
 
 // candidates lists the other addresses of each private IPv4 /24 we are on.

@@ -10,8 +10,26 @@ import (
 
 // probe prints what the app can see and control, without UI (--probe).
 func probe() {
-	m := display.Target()
-	fmt.Printf("显示器: %s  接口: %s\n", m.Name, or(m.Connection, "未知"))
+	for i, m := range display.Targets() {
+		if i > 0 {
+			fmt.Println()
+		}
+		probeMonitor(m)
+	}
+	fmt.Println()
+	start := time.Now()
+	hosts, err := mitv.Discover()
+	if err != nil {
+		fmt.Println("局域网: 未发现澎湃 OS 显示器")
+		return
+	}
+	for _, host := range hosts {
+		probeLink(host, time.Since(start))
+	}
+}
+
+func probeMonitor(m display.Monitor) {
+	fmt.Printf("显示器: %s  接口: %s  标识: %s\n", m.Name, or(m.Connection, "未知"), m.Key)
 	if mode, ok := m.CurrentMode(); ok {
 		hidpi := ""
 		if mode.HiDPI() {
@@ -47,16 +65,12 @@ func probe() {
 		}
 		d.Close()
 	}
+}
 
-	start := time.Now()
-	host, err := mitv.Discover()
-	if err != nil {
-		fmt.Println("局域网: 未发现澎湃 OS 显示器")
-		return
-	}
+func probeLink(host string, found time.Duration) {
 	link := mitv.New(host)
 	name, _ := link.DeviceName()
-	fmt.Printf("局域网: %s @ %s（%.2fs）\n", name, host, time.Since(start).Seconds())
+	fmt.Printf("局域网: %s @ %s（%.2fs）\n", name, host, found.Seconds())
 	if sources, err := link.Sources(); err == nil {
 		fmt.Print("信号源:")
 		for _, s := range sources {

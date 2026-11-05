@@ -3,6 +3,21 @@
   "trayOpen": "Open MonitorBar",
   "menuMore": "More",
   "menuDetect": "Detect Displays Again",
+  "menuLink": "LAN Remote",
+  "menuLinkMonitor": "{name} ({host})",
+  "@menuLinkMonitor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "menuLinkNone": "None",
+  "syncDisplays": "Sync",
+  "syncDisplaysNote": "Change the brightness, color temperature, scenes, volume and input of every display at once",
   "menuDisplaySettings": "Open Display Settings…",
   "menuLaunchAtLogin": "Launch at Login",
   "menuCheckUpdates": "Check for Updates",

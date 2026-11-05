@@ -2,6 +2,7 @@ package main
 
 import (
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,7 @@ func (p *panel) view(c *ui.Context) {
 		}
 		body.Children(func() {
 			p.header(c)
+			p.displays(c)
 			p.tabs(c)
 			p.content(c)
 			p.updateBar(c)
@@ -120,6 +122,9 @@ func (p *panel) header(c *ui.Context) {
 			if m.Item(locales.MenuDetect()).Chosen() {
 				s.detect()
 			}
+			if len(s.outputs) > 1 && len(s.lan) > 0 {
+				p.linkMenu(m)
+			}
 			if m.Item(locales.MenuDisplaySettings()).Chosen() {
 				_ = mygo.Shell.OpenExternal(display.SettingsURL)
 			}
@@ -158,6 +163,64 @@ func (p *panel) header(c *ui.Context) {
 			s.sleepDisplay()
 		}
 	})
+}
+
+// displays switches between the displays, and keeps them in sync, when
+// there are several (#14).
+func (p *panel) displays(c *ui.Context) {
+	s := p.s
+	if len(s.outputs) < 2 {
+		return
+	}
+	ui.Row(c).Gap(6).Margin(0, 0, 10, 0).Children(func() {
+		for i, o := range s.outputs {
+			e := chip(c.Key(o.monitor.Key), o == s.output).Height(30).Grow(1).Basis(0).PaddingX(8)
+			e.Children(func() { ui.Text(c, s.displayLabel(i)).FontSize(11).FontWeight(500).SingleLine() })
+			if e.Clicked() && o != s.output {
+				s.showDisplay(o)
+				s.record("")
+			}
+		}
+		sync := chip(c.Key("sync"), s.prefs.SyncDisplays).Size(56, 30).Gap(4).Tooltip(locales.SyncDisplaysNote()).Label(locales.SyncDisplays())
+		sync.Children(func() {
+			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+				icon(c, "link").FontSize(11)
+				ui.Text(c, locales.SyncDisplays()).FontSize(11).FontWeight(500)
+			})
+		})
+		if sync.Clicked() {
+			s.prefs.SyncDisplays, s.dirty = !s.prefs.SyncDisplays, true
+		}
+	})
+}
+
+// linkMenu pairs the display shown with one of the HyperOS monitors on the
+// LAN: two alike can't be told apart, so the user may choose.
+func (p *panel) linkMenu(m *ui.Menu) {
+	s := p.s
+	m.Submenu(locales.MenuLink(), func(m *ui.Menu) {
+		for _, lm := range s.lan {
+			if m.Item(locales.MenuLinkMonitor(or(lm.name, locales.MonitorUnnamed()), lm.link.Host)).
+				Checked(s.link != nil && s.link.Host == lm.link.Host).Chosen() {
+				s.chooseLink(lm.link.Host)
+			}
+		}
+		m.Separator()
+		if m.Item(locales.MenuLinkNone()).Checked(s.link == nil).Chosen() {
+			s.chooseLink("")
+		}
+	})
+}
+
+// displayLabel names the display at i for the switcher: displays of one
+// model are numbered.
+func (s *store) displayLabel(i int) string {
+	name := or(s.outputs[i].monitor.Name, locales.MonitorUnnamed())
+	same := slices.IndexFunc(s.outputs, func(o *output) bool { return o != s.outputs[i] && o.monitor.Name == s.outputs[i].monitor.Name })
+	if same < 0 {
+		return name
+	}
+	return name + " " + strconv.Itoa(i+1)
 }
 
 // caption sums the monitor up: "External display · HDMI · 4K · 160Hz".
