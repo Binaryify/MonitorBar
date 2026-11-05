@@ -5,6 +5,8 @@
 <p align="center">macOS 菜单栏 / Windows 托盘里的显示器管理工具，一份 Go 代码，两端原生界面。<br>
 A menu bar (macOS) and tray (Windows) app to manage your monitor — <a href="#english">English</a></p>
 
+<p align="center"><a href="https://awesomemygo.dev/apps/monitorbar"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a></p>
+
 <p align="center">
 <img src="docs/screenshots/overview.png" width="270" alt="概览">
 <img src="docs/screenshots/modes.png" width="270" alt="分辨率">
