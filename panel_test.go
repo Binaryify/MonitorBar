@@ -44,13 +44,13 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 			inputs: []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 			volume: 80, hasVolume: true, deviceVolume: 80,
 		},
-		prefs:          &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
-		tracker:        usage.Open(filepath.Join(t.TempDir(), "usage.json")),
-		redraw:         func() {},
-		setGamma:       func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
-		soundToDisplay: func() bool { return true },
-		onAdjust:       func(hudKind) {},
-		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
+		prefs:      &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
+		tracker:    usage.Open(filepath.Join(t.TempDir(), "usage.json")),
+		redraw:     func() {},
+		setGamma:   func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
+		audioRoute: func() display.AudioRoute { return display.DisplayAudio },
+		onAdjust:   func(hudKind) {},
+		now:        func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
 	s.outputs = []*output{s.output}
 	s.prefs.DayScene, s.prefs.NightScene = "day", "night"
@@ -512,7 +512,7 @@ func TestMediaKey(t *testing.T) {
 	}
 	if step, _ := s.mediaKey(mediakeys.VolumeDown); step == nil {
 		t.Fatal("volume down left to macOS with the sound on the display")
-	} else if step(); s.volume != 75 {
+	} else if step(); s.volume != 78 {
 		t.Errorf("volume %v after down from 80", s.volume)
 	}
 
@@ -528,7 +528,7 @@ func TestMediaKey(t *testing.T) {
 	if step, _ := s.mediaKey(mediakeys.BrightnessUp); step != nil {
 		t.Error("a key stepped the built-in display, with no external one")
 	}
-	s.soundToDisplay = func() bool { return false }
+	s.audioRoute = func() display.AudioRoute { return display.OtherAudio }
 	if step, _ := s.mediaKey(mediakeys.VolumeUp); step != nil {
 		t.Error("a key took the volume of sound playing elsewhere")
 	}
@@ -678,5 +678,29 @@ func TestInputShortcut(t *testing.T) {
 		if strings.HasPrefix(sc.id, "input-") {
 			t.Errorf("%s is bound with no keys recorded", sc.id)
 		}
+	}
+}
+
+func TestMultiOutputMediaKeys(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil
+	s.hasBuiltin = true
+	s.audioRoute = func() display.AudioRoute { return display.GroupDisplayAudio }
+	s.prefs.VolumeStep = 3
+	vol := s.volume
+	for _, k := range []mediakeys.Key{mediakeys.VolumeUp, mediakeys.BrightnessDown} {
+		run, pass := s.mediaKey(k)
+		if run == nil || pass {
+			t.Fatal("multi-output key passed to macOS", k)
+		}
+		run()
+	}
+	if s.volume != vol+3 {
+		t.Fatalf("volume = %v after custom step", s.volume)
+	}
+	shortcuts[2].run(s)
+	if s.volume != vol {
+		t.Fatal("volume shortcut ignored the custom step")
 	}
 }
