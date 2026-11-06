@@ -742,3 +742,27 @@ func TestVolumeStepCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncedMuteShortcutUsesCapableDisplay(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	selected := s.output
+	selected.hasVolume = false
+	other := &output{hasVolume: true, volume: 35}
+	s.outputs = []*output{selected, other}
+	s.prefs.SyncDisplays = true
+	var mute shortcut
+	for _, sc := range shortcuts {
+		if sc.id == "volumeMute" {
+			mute = sc
+		}
+	}
+	mute.run(s)
+	if other.volume != 0 || s.output != selected {
+		t.Fatalf("mute shortcut left volume %v", other.volume)
+	}
+	mute.run(s)
+	if other.volume != 35 {
+		t.Fatalf("unmute restored %v, want 35", other.volume)
+	}
+}

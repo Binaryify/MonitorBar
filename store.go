@@ -596,10 +596,11 @@ func (s *store) stepVolume(delta float64) {
 // toggleMute takes the volume to 0, or back to what it was: neither the LAN
 // remote nor every DDC/CI display has a mute.
 func (s *store) toggleMute() {
-	if !s.hasVolume {
+	target := s.volumeKeyTarget()
+	if target == nil {
 		return
 	}
-	mute := s.volume > 0 // as the display shown is, on all in sync
+	mute := target.volume > 0 // as the display shown is, or one in sync that has a volume
 	s.each(func() { s.setMuted(mute) })
 }
 

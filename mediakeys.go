@@ -32,11 +32,10 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		}
 		return func() { s.each(func() { s.stepVolume(delta) }); s.adjusted(hudVolume) }, false
 	case mediakeys.Mute:
-		target := s.volumeKeyTarget()
-		if target == nil || s.audioRoute() == display.OtherAudio {
+		if s.volumeKeyTarget() == nil || s.audioRoute() == display.OtherAudio {
 			return nil, false
 		}
-		return func() { s.on(target, s.toggleMute); s.adjusted(hudVolume) }, false
+		return func() { s.toggleMute(); s.adjusted(hudVolume) }, false
 	}
 	return nil, false
 }
@@ -85,7 +84,9 @@ func (s *store) setMediaKeys(on bool) {
 // openAccessibility opens the Accessibility list in System Settings.
 func openAccessibility() { _ = mygo.Shell.OpenExternal(mediakeys.SettingsURL) }
 
-// A synced group can adjust volume even if the selected display has no speaker control.
+// volumeKeyTarget is the display whose volume the keys, the shortcuts and
+// the HUD go by: the one shown, or in sync one that has a volume when the
+// one shown has none.
 func (s *store) volumeKeyTarget() *output {
 	if s.hasVolume {
 		return s.output
