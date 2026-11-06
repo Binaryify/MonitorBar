@@ -33,7 +33,7 @@ jobs:
       - name: Package
         run: |
           mkdir dist
-          cp "build/darwin-universal/MonitorBar $VERSION.dmg" "dist/MonitorBar-$VERSION-macos-universal.dmg"
+          cp "build/darwin-universal/monitorbar-$VERSION.dmg" "dist/MonitorBar-$VERSION-macos-universal.dmg"
           (cd build/windows-amd64 && zip -q -r "../../dist/MonitorBar-$VERSION-windows-amd64.zip" MonitorBar.exe icon.png)
           # The updates keep their names: the manifests point at them.
           cp build/*/monitorbar-*.tar.gz build/*/update-*.json dist/
