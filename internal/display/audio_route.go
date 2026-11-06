@@ -1,11 +1,12 @@
 package display
 
+// AudioRoute describes whether the default audio output reaches a display directly or through a group.
 type AudioRoute uint8
 
 const (
-	OtherAudio AudioRoute = iota
-	DisplayAudio
-	GroupDisplayAudio
+	OtherAudio        AudioRoute = iota // No active HDMI or DisplayPort output.
+	DisplayAudio                        // A direct HDMI or DisplayPort output.
+	GroupDisplayAudio                   // An aggregate with an active display output.
 )
 
 // fourCC packs a Core Audio four-character code.

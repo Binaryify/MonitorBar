@@ -28,7 +28,7 @@ const (
 
 // adjusted tells that a key just set a level, for the HUD to show it.
 func (s *store) adjusted(kind hudKind) {
-	if kind == "" || !s.prefs.HUD || kind == hudVolume && !s.hasVolume {
+	if kind == "" || !s.prefs.HUD || kind == hudVolume && s.volumeKeyTarget() == nil {
 		return
 	}
 	s.onAdjust(kind)
@@ -37,11 +37,15 @@ func (s *store) adjusted(kind hudKind) {
 // hudLevel is what the HUD shows for kind: its icon, title and percent.
 func (s *store) hudLevel(kind hudKind) (iconName, title string, percent float64) {
 	if kind == hudVolume {
+		target := s.volumeKeyTarget()
+		if target == nil {
+			return "volumeOff", locales.Volume(), 0
+		}
 		iconName = "volume"
-		if s.volume == 0 {
+		if target.volume == 0 {
 			iconName = "volumeOff"
 		}
-		return iconName, locales.Volume(), s.volume
+		return iconName, locales.Volume(), target.volume
 	}
 	if s.hasBrightness {
 		return "sun", locales.Brightness(), s.combinedBrightness()

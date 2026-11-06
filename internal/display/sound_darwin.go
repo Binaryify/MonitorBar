@@ -17,6 +17,8 @@ var (
 	audioOnce                      sync.Once
 )
 
+// CurrentAudioRoute follows the default output and its active aggregate members.
+// Unavailable properties fail closed, leaving unrelated outputs with macOS.
 func CurrentAudioRoute() AudioRoute {
 	audioOnce.Do(func() {
 		lib, err := purego.Dlopen("/System/Library/Frameworks/CoreAudio.framework/CoreAudio", purego.RTLD_NOW|purego.RTLD_GLOBAL)

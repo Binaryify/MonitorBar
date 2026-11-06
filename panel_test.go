@@ -512,7 +512,7 @@ func TestMediaKey(t *testing.T) {
 	}
 	if step, _ := s.mediaKey(mediakeys.VolumeDown); step == nil {
 		t.Fatal("volume down left to macOS with the sound on the display")
-	} else if step(); s.volume != 78 {
+	} else if step(); s.volume != 75 {
 		t.Errorf("volume %v after down from 80", s.volume)
 	}
 
@@ -691,8 +691,8 @@ func TestMultiOutputMediaKeys(t *testing.T) {
 	vol := s.volume
 	for _, k := range []mediakeys.Key{mediakeys.VolumeUp, mediakeys.BrightnessDown} {
 		run, pass := s.mediaKey(k)
-		if run == nil || pass {
-			t.Fatal("multi-output key passed to macOS", k)
+		if run == nil || pass != (k == mediakeys.BrightnessDown) {
+			t.Fatal("unexpected multi-output key routing", k, pass)
 		}
 		run()
 	}
@@ -702,5 +702,43 @@ func TestMultiOutputMediaKeys(t *testing.T) {
 	shortcuts[2].run(s)
 	if s.volume != vol {
 		t.Fatal("volume shortcut ignored the custom step")
+	}
+}
+
+func TestSyncedVolumeHUDUsesCapableDisplay(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	selected := s.output
+	selected.hasVolume = false
+	other := &output{hasVolume: true, volume: 35}
+	s.outputs = []*output{selected, other}
+	s.prefs.SyncDisplays = true
+	s.prefs.HUD = true
+	s.audioRoute = func() display.AudioRoute { return display.GroupDisplayAudio }
+	shown := false
+	s.onAdjust = func(kind hudKind) { shown = kind == hudVolume }
+	for _, key := range []mediakeys.Key{mediakeys.VolumeUp, mediakeys.Mute} {
+		shown = false
+		step, pass := s.mediaKey(key)
+		if step == nil || pass {
+			t.Fatal("capable synced display not selected")
+		}
+		step()
+		_, _, level := s.hudLevel(hudVolume)
+		if !shown || level != other.volume || s.output != selected {
+			t.Fatal("HUD lost target or changed selection", level, other.volume)
+		}
+	}
+}
+
+func TestVolumeStepCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		saved int
+		want  float64
+	}{{0, 5}, {-1, 5}, {11, 5}, {2, 2}, {10, 10}} {
+		prefs := settings{VolumeStep: tc.saved}
+		if got := prefs.volumeStep(); got != tc.want {
+			t.Errorf("%d: %v, want %v", tc.saved, got, tc.want)
+		}
 	}
 }

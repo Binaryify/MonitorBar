@@ -121,7 +121,7 @@ func (s *settings) save() {
 
 func (s *settings) volumeStep() float64 {
 	if s.VolumeStep < 1 || s.VolumeStep > 10 {
-		return 2
+		return shortcutStep
 	}
 	return float64(s.VolumeStep)
 }

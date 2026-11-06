@@ -20,8 +20,8 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		if k == mediakeys.BrightnessDown {
 			delta = -delta
 		}
-		// Share brightness with the built-in screen except when controlling a display audio group.
-		return func() { s.each(func() { s.stepBrightness(delta) }); s.adjusted(hudBrightness) }, s.hasBuiltin && s.audioRoute() != display.GroupDisplayAudio
+		// A MacBook keeps its own brightness keys while the external display follows.
+		return func() { s.each(func() { s.stepBrightness(delta) }); s.adjusted(hudBrightness) }, s.hasBuiltin
 	case mediakeys.VolumeUp, mediakeys.VolumeDown:
 		if s.volumeKeyTarget() == nil || s.audioRoute() == display.OtherAudio {
 			return nil, false // the sound plays elsewhere, at macOS's volume
