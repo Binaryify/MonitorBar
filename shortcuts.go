@@ -41,8 +41,8 @@ const (
 var shortcuts = []shortcut{
 	{"brightnessDown", locales.ShortcutBrightnessDown, "Ctrl+Alt+Down", func(s *store) { s.each(func() { s.stepBrightness(-shortcutStep) }) }, hudBrightness, true},
 	{"brightnessUp", locales.ShortcutBrightnessUp, "Ctrl+Alt+Up", func(s *store) { s.each(func() { s.stepBrightness(shortcutStep) }) }, hudBrightness, true},
-	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.each(func() { s.stepVolume(-shortcutStep) }) }, hudVolume, true},
-	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.each(func() { s.stepVolume(shortcutStep) }) }, hudVolume, true},
+	{"volumeDown", locales.ShortcutVolumeDown, "Ctrl+Alt+Shift+Down", func(s *store) { s.each(func() { s.stepVolume(-s.prefs.volumeStep()) }) }, hudVolume, true},
+	{"volumeUp", locales.ShortcutVolumeUp, "Ctrl+Alt+Shift+Up", func(s *store) { s.each(func() { s.stepVolume(s.prefs.volumeStep()) }) }, hudVolume, true},
 	{"volumeMute", locales.ShortcutVolumeMute, "", func(s *store) { s.toggleMute() }, hudVolume, false},
 }
 

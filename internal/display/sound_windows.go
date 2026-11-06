@@ -2,6 +2,5 @@
 
 package display
 
-// SoundToDisplay has no Windows counterpart yet: the media keys are
-// macOS's alone.
-func SoundToDisplay() bool { return false }
+// CurrentAudioRoute returns OtherAudio on Windows, where media-key interception is unsupported.
+func CurrentAudioRoute() AudioRoute { return OtherAudio }

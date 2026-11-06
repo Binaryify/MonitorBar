@@ -44,13 +44,13 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 			inputs: []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 			volume: 80, hasVolume: true, deviceVolume: 80,
 		},
-		prefs:          &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
-		tracker:        usage.Open(filepath.Join(t.TempDir(), "usage.json")),
-		redraw:         func() {},
-		setGamma:       func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
-		soundToDisplay: func() bool { return true },
-		onAdjust:       func(hudKind) {},
-		now:            func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
+		prefs:      &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
+		tracker:    usage.Open(filepath.Join(t.TempDir(), "usage.json")),
+		redraw:     func() {},
+		setGamma:   func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
+		audioRoute: func() display.AudioRoute { return display.DisplayAudio },
+		onAdjust:   func(hudKind) {},
+		now:        func() time.Time { return time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local) },
 	}
 	s.outputs = []*output{s.output}
 	s.prefs.DayScene, s.prefs.NightScene = "day", "night"
@@ -528,7 +528,7 @@ func TestMediaKey(t *testing.T) {
 	if step, _ := s.mediaKey(mediakeys.BrightnessUp); step != nil {
 		t.Error("a key stepped the built-in display, with no external one")
 	}
-	s.soundToDisplay = func() bool { return false }
+	s.audioRoute = func() display.AudioRoute { return display.OtherAudio }
 	if step, _ := s.mediaKey(mediakeys.VolumeUp); step != nil {
 		t.Error("a key took the volume of sound playing elsewhere")
 	}
@@ -677,6 +677,68 @@ func TestInputShortcut(t *testing.T) {
 	for _, sc := range s.boundShortcuts() {
 		if strings.HasPrefix(sc.id, "input-") {
 			t.Errorf("%s is bound with no keys recorded", sc.id)
+		}
+	}
+}
+
+func TestMultiOutputMediaKeys(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	s.link = nil
+	s.hasBuiltin = true
+	s.audioRoute = func() display.AudioRoute { return display.GroupDisplayAudio }
+	s.prefs.VolumeStep = 3
+	vol := s.volume
+	for _, k := range []mediakeys.Key{mediakeys.VolumeUp, mediakeys.BrightnessDown} {
+		run, pass := s.mediaKey(k)
+		if run == nil || pass != (k == mediakeys.BrightnessDown) {
+			t.Fatal("unexpected multi-output key routing", k, pass)
+		}
+		run()
+	}
+	if s.volume != vol+3 {
+		t.Fatalf("volume = %v after custom step", s.volume)
+	}
+	shortcuts[2].run(s)
+	if s.volume != vol {
+		t.Fatal("volume shortcut ignored the custom step")
+	}
+}
+
+func TestSyncedVolumeHUDUsesCapableDisplay(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	selected := s.output
+	selected.hasVolume = false
+	other := &output{hasVolume: true, volume: 35}
+	s.outputs = []*output{selected, other}
+	s.prefs.SyncDisplays = true
+	s.prefs.HUD = true
+	s.audioRoute = func() display.AudioRoute { return display.GroupDisplayAudio }
+	shown := false
+	s.onAdjust = func(kind hudKind) { shown = kind == hudVolume }
+	for _, key := range []mediakeys.Key{mediakeys.VolumeUp, mediakeys.Mute} {
+		shown = false
+		step, pass := s.mediaKey(key)
+		if step == nil || pass {
+			t.Fatal("capable synced display not selected")
+		}
+		step()
+		_, _, level := s.hudLevel(hudVolume)
+		if !shown || level != other.volume || s.output != selected {
+			t.Fatal("HUD lost target or changed selection", level, other.volume)
+		}
+	}
+}
+
+func TestVolumeStepCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		saved int
+		want  float64
+	}{{0, 5}, {-1, 5}, {11, 5}, {2, 2}, {10, 10}} {
+		prefs := settings{VolumeStep: tc.saved}
+		if got := prefs.volumeStep(); got != tc.want {
+			t.Errorf("%d: %v, want %v", tc.saved, got, tc.want)
 		}
 	}
 }

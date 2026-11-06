@@ -137,8 +137,8 @@ type store struct {
 	// onAdjust shows the HUD for a level a key just set.
 	onAdjust func(hudKind)
 	// The media keys: taken where the user asked and macOS allows.
-	soundToDisplay  func() bool // whether the sound goes to the display, fixed in tests
-	mediaKeysDenied bool        // asked for, without the Accessibility permission
+	audioRoute      func() display.AudioRoute // whether the sound goes to the display, fixed in tests
+	mediaKeysDenied bool                      // asked for, without the Accessibility permission
 
 	notice string
 	dirty  bool // prefs changed since the last save
@@ -242,16 +242,16 @@ var controlCatalog = []struct {
 
 func newStore() *store {
 	s := &store{
-		prefs:          loadSettings(),
-		tracker:        usage.Open(filepath.Join(dataDir(), "usage.json")),
-		redraw:         func() {},
-		now:            time.Now,
-		launchAtLogin:  mygo.App.OpenAtLogin(),
-		canUpdate:      mygo.Updater.Enabled(),
-		registered:     map[string]string{},
-		soundToDisplay: display.SoundToDisplay,
-		keyHeld:        keystate.Held,
-		onAdjust:       func(hudKind) {},
+		prefs:         loadSettings(),
+		tracker:       usage.Open(filepath.Join(dataDir(), "usage.json")),
+		redraw:        func() {},
+		now:           time.Now,
+		launchAtLogin: mygo.App.OpenAtLogin(),
+		canUpdate:     mygo.Updater.Enabled(),
+		registered:    map[string]string{},
+		audioRoute:    display.CurrentAudioRoute,
+		keyHeld:       keystate.Held,
+		onAdjust:      func(hudKind) {},
 	}
 	s.dayStart, s.nightStart = parseClock(s.prefs.DayStart, 7*60), parseClock(s.prefs.NightStart, 19*60)
 	s.refreshDisplay()

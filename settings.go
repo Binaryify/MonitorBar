@@ -42,7 +42,8 @@ type settings struct {
 	// for none.
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
-	MediaKeys bool `json:"mediaKeys"`
+	MediaKeys  bool `json:"mediaKeys"`
+	VolumeStep int  `json:"volumeStep,omitempty"`
 	// Showing the level under the menu bar icon as the keys change it.
 	HUD bool `json:"hud"`
 	// The language chosen in the panel, "" to follow the system's.
@@ -116,4 +117,11 @@ func (s *settings) save() {
 	}
 	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
 	_ = os.WriteFile(s.path, data, 0o644)
+}
+
+func (s *settings) volumeStep() float64 {
+	if s.VolumeStep < 1 || s.VolumeStep > 10 {
+		return shortcutStep
+	}
+	return float64(s.VolumeStep)
 }
