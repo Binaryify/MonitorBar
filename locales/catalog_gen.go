@@ -1125,6 +1125,26 @@ func (msgs Messages) ModesCount(count int) string {
 	return Catalog.Format(msgs.locale, "modesCount", map[string]any{"count": count})
 }
 
+// ModesShowMore says "{count, plural, one {Show # more mode} other {Show # more modes}}"
+// in the language the app shows.
+func ModesShowMore(count int) string { return In(i18n.Locale()).ModesShowMore(count) }
+
+// ModesShowMore says "{count, plural, one {Show # more mode} other {Show # more modes}}"
+// in the language of msgs.
+func (msgs Messages) ModesShowMore(count int) string {
+	return Catalog.Format(msgs.locale, "modesShowMore", map[string]any{"count": count})
+}
+
+// ModesShowLess says "Show less"
+// in the language the app shows.
+func ModesShowLess() string { return In(i18n.Locale()).ModesShowLess() }
+
+// ModesShowLess says "Show less"
+// in the language of msgs.
+func (msgs Messages) ModesShowLess() string {
+	return Catalog.Format(msgs.locale, "modesShowLess", nil)
+}
+
 // ModeRendered says "Rendered at {width, number, ::group-off}×{height, number, ::group-off}"
 // in the language the app shows.
 func ModeRendered(width int, height int) string { return In(i18n.Locale()).ModeRendered(width, height) }
@@ -1317,6 +1337,16 @@ func NoticeUpdateFailed() string { return In(i18n.Locale()).NoticeUpdateFailed()
 // in the language of msgs.
 func (msgs Messages) NoticeUpdateFailed() string {
 	return Catalog.Format(msgs.locale, "noticeUpdateFailed", nil)
+}
+
+// NoticeModeApplying says "Switching display mode…"
+// in the language the app shows.
+func NoticeModeApplying() string { return In(i18n.Locale()).NoticeModeApplying() }
+
+// NoticeModeApplying says "Switching display mode…"
+// in the language of msgs.
+func (msgs Messages) NoticeModeApplying() string {
+	return Catalog.Format(msgs.locale, "noticeModeApplying", nil)
 }
 
 // NoticeModeRejected says "Couldn't switch: the display refused the mode"

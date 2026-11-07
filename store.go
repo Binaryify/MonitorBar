@@ -115,7 +115,8 @@ type store struct {
 	// The display the panel shows and its fields are of: on and every
 	// make another one it for a while, so actions work on each the same.
 	*output
-	outputs []*output // every display managed, the main one first
+	outputs    []*output // every display managed, the main one first
+	modeSwitch *output
 
 	prefs    *settings
 	tracker  *usage.Tracker
@@ -163,6 +164,8 @@ type output struct {
 	current     display.Mode
 	hasCurrent  bool
 	switchingTo string // the mode the LAN remote is switching the monitor to
+
+	hiDPIModesOpen, standardModesOpen bool
 
 	// The software picture, through the gamma table.
 	soft   float64 // gamma %, 20...100
@@ -1033,12 +1036,31 @@ func (s *store) installUpdate() {
 // MARK: Display modes
 
 func (s *store) applyMode(m display.Mode) {
-	if err := s.monitor.Apply(m); err != nil {
+	if s.modeSwitch != nil {
+		return
+	}
+	o := s.output
+	monitor := o.monitor
+	s.modeSwitch, s.notice = o, locales.NoticeModeApplying()
+	go func() {
+		err := monitor.Apply(m)
+		s.post(func() {
+			s.refreshDisplay()
+			s.modeApplied(o, monitor, m, err)
+		})
+	}()
+}
+
+func (s *store) modeApplied(o *output, monitor display.Monitor, m display.Mode, err error) {
+	s.modeSwitch = nil
+	if s.output != o || !slices.Contains(s.outputs, o) || o.monitor != monitor {
+		return
+	}
+	if err != nil {
 		s.notice = locales.NoticeModeRejected()
 	} else {
 		s.notice = locales.NoticeModeSwitched(m.Title(), m.RefreshRate)
 	}
-	s.refreshDisplay()
 }
 
 // competitive reports the monitor in its 1080p 320Hz mode: only then does

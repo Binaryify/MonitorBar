@@ -394,56 +394,72 @@ func (p *panel) autoSwitch(c *ui.Context) {
 // MARK: 分辨率
 
 func (p *panel) modes(c *ui.Context) {
-	s := p.s
-	rate := 60
-	if s.hasCurrent {
-		rate = s.current.RefreshRate
-	}
-	if s.link != nil { // only the HyperOS remote can switch the monitor's own mode
-		card(c, func() {
-			trailing := ""
-			if s.switchingTo != "" {
-				trailing = locales.CompetitiveSwitching()
-			}
-			cardTitle(c, locales.Competitive(), "sparkles", trailing)
-			on := s.competitive()
-			ui.Grid(c).Columns(2).Gap(6).Children(func() {
-				if chipText(c.Key("4k"), "4K 160Hz", !on) {
-					s.setCompetitive(false)
-				}
-				if chipText(c.Key("320"), "1080p 320Hz", on) {
-					s.setCompetitive(true)
-				}
-			})
-		})
-	}
-	if rates := display.RefreshRates(s.modes, s.current); len(rates) > 1 {
-		card(c, func() {
-			cardTitle(c, locales.RefreshRate(), "gauge", s.current.Title())
-			ui.Grid(c).Columns(4).Gap(6).Children(func() {
-				for _, m := range rates {
-					if chipText(c.Key(m.ID()), fmt.Sprintf("%d Hz", m.RefreshRate), m.RefreshRate == rate) {
-						s.applyMode(m)
+	ui.Column(c.Key(p.s.monitor.Key)).Gap(10).Children(func() {
+		s := p.s
+		rate := 60
+		if s.hasCurrent {
+			rate = s.current.RefreshRate
+			card(c.Key("current-mode"), func() {
+				cardTitle(c, locales.CurrentMode(), "display", fmt.Sprintf("%d Hz", rate))
+				ui.Row(c).Gap(8).Children(func() {
+					ui.Text(c, s.current.Title()).FontSize(22).FontWeight(600).FontFeatures("tnum").Grow(1)
+					if s.current.HiDPI() {
+						ui.Text(c, "HiDPI").FontSize(11).TextColor(accent)
 					}
-				}
+				})
 			})
-		})
-	}
-	p.resolutions(c, locales.ModesHiDPI(), "zoom", display.Resolutions(s.modes, true, rate))
-	p.resolutions(c, locales.ModesStandard(), "layers", display.Resolutions(s.modes, false, rate))
+		}
+		if s.link != nil { // only the HyperOS remote can switch the monitor's own mode
+			card(c, func() {
+				trailing := ""
+				if s.switchingTo != "" {
+					trailing = locales.CompetitiveSwitching()
+				}
+				cardTitle(c, locales.Competitive(), "sparkles", trailing)
+				on := s.competitive()
+				ui.Grid(c).Columns(2).Gap(6).Children(func() {
+					if chipText(c.Key("4k"), "4K 160Hz", !on) {
+						s.setCompetitive(false)
+					}
+					if chipText(c.Key("320"), "1080p 320Hz", on) {
+						s.setCompetitive(true)
+					}
+				})
+			})
+		}
+		if rates := display.RefreshRates(s.modes, s.current); len(rates) > 1 {
+			card(c, func() {
+				cardTitle(c, locales.RefreshRate(), "gauge", s.current.Title())
+				ui.Grid(c).Columns(4).Gap(6).Disabled(s.modeSwitch != nil).Children(func() {
+					for _, m := range rates {
+						if chipText(c.Key(m.ID()), fmt.Sprintf("%d Hz", m.RefreshRate), m.RefreshRate == rate) && s.modeSwitch == nil {
+							s.applyMode(m)
+						}
+					}
+				})
+			})
+		}
+		p.resolutions(c, locales.ModesHiDPI(), "zoom", display.Resolutions(s.modes, true, rate), &s.hiDPIModesOpen)
+		p.resolutions(c, locales.ModesStandard(), "layers", display.Resolutions(s.modes, false, rate), &s.standardModesOpen)
+	})
 }
 
-func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []display.Mode) {
+func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []display.Mode, open *bool) {
 	s := p.s
 	if len(modes) == 0 {
 		return
 	}
 	card(c.Key(iconName), func() {
 		cardTitle(c, title, iconName, locales.ModesCount(len(modes)))
-		ui.Column(c).Gap(4).Children(func() {
-			for _, m := range modes {
+		visible := modes
+		if !*open {
+			visible = modes[:min(3, len(modes))]
+		}
+		ui.Column(c).Children(func() {
+			for _, m := range visible {
 				selected := s.hasCurrent && m.SizeKey() == s.current.SizeKey()
-				row := ui.Row(c.Key(m.ID())).Height(28).PaddingX(9).Gap(8).Radius(8).Cursor(ui.CursorPointer)
+				row := ui.ButtonBase(c.Key(m.ID())).Disabled(s.modeSwitch != nil).Height(32).PaddingX(9).Gap(8).Radius(8).Cursor(ui.CursorPointer).
+					Label(m.Title())
 				if selected {
 					row.Background(accent.Alpha(0.14))
 				} else if row.Hovered() {
@@ -464,11 +480,31 @@ func (p *panel) resolutions(c *ui.Context, title, iconName string, modes []displ
 						check.Opacity(0)
 					}
 				})
-				if row.Clicked() {
+				if row.Clicked() && !selected && s.modeSwitch == nil {
 					s.applyMode(m)
 				}
 			}
 		})
+		if len(modes) > 3 {
+			label, chevron := locales.ModesShowMore(len(modes)-3), "chevronDown"
+			if *open {
+				label, chevron = locales.ModesShowLess(), "chevronUp"
+			}
+			e := ui.ButtonBase(c.Key("more")).Height(28).PaddingX(9).Gap(8).Radius(8).
+				Label(label).Role(ui.RoleDisclosure).Expanded(*open).Cursor(ui.CursorPointer).TextColor(muted)
+			if e.Hovered() || e.Pressed() {
+				e.Background(ui.RGBA(255, 255, 255, 0.05))
+			}
+			e.Children(func() {
+				ui.Text(c, label).FontSize(11).Grow(1)
+				icon(c, chevron).FontSize(10)
+			})
+			if e.Clicked() {
+				*open = !*open
+				e.Expanded(*open)
+				c.Invalidate()
+			}
+		}
 	})
 }
 
