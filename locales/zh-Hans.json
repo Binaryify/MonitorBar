@@ -44,12 +44,12 @@
   "modeHiDPI": "HiDPI · 渲染 {width, number, ::group-off}×{height, number, ::group-off} · {rate} Hz",
   "volume": "显示器音量",
   "scenes": "场景",
-  "scenesNote": "亮度 + 色温",
+  "scenesNote": "完整画面",
   "sceneDay": "日间",
   "sceneReading": "阅读",
   "sceneMovie": "观影",
   "sceneNight": "夜间",
-  "sceneSaveLabel": "把当前亮度和色温保存为场景",
+  "sceneSaveLabel": "将所有支持的画面设置保存为场景",
   "sceneCustomName": "场景 {n}",
   "savedScenes": "我的场景",
   "savedScenesNote": "点名称可以重命名",
@@ -131,5 +131,7 @@
   "noticeModeSwitched": "已切换到 {mode} · {rate} Hz",
   "noticeSwitchFailed": "切换失败：显示器没有响应",
   "noticeSwitching": "显示器正在切换到 {mode}，屏幕会黑几秒",
-  "noticeLoginFailed": "登录项设置失败：{error}"
+  "noticeLoginFailed": "登录项设置失败：{error}",
+  "restoreDefaults": "恢复默认",
+  "restoreDefaultsNote": "恢复每台显示器首次记录的画面，而非出厂设置"
 }

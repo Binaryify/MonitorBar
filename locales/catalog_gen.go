@@ -479,11 +479,11 @@ func (msgs Messages) Scenes() string {
 	return Catalog.Format(msgs.locale, "scenes", nil)
 }
 
-// ScenesNote says "Brightness + color temperature"
+// ScenesNote says "Complete picture"
 // in the language the app shows.
 func ScenesNote() string { return In(i18n.Locale()).ScenesNote() }
 
-// ScenesNote says "Brightness + color temperature"
+// ScenesNote says "Complete picture"
 // in the language of msgs.
 func (msgs Messages) ScenesNote() string {
 	return Catalog.Format(msgs.locale, "scenesNote", nil)
@@ -529,11 +529,11 @@ func (msgs Messages) SceneNight() string {
 	return Catalog.Format(msgs.locale, "sceneNight", nil)
 }
 
-// SceneSaveLabel says "Save the current brightness and color temperature as a scene"
+// SceneSaveLabel says "Save all supported picture controls as a scene"
 // in the language the app shows.
 func SceneSaveLabel() string { return In(i18n.Locale()).SceneSaveLabel() }
 
-// SceneSaveLabel says "Save the current brightness and color temperature as a scene"
+// SceneSaveLabel says "Save all supported picture controls as a scene"
 // in the language of msgs.
 func (msgs Messages) SceneSaveLabel() string {
 	return Catalog.Format(msgs.locale, "sceneSaveLabel", nil)
@@ -1369,4 +1369,24 @@ func NoticeLoginFailed(error string) string { return In(i18n.Locale()).NoticeLog
 // in the language of msgs.
 func (msgs Messages) NoticeLoginFailed(error string) string {
 	return Catalog.Format(msgs.locale, "noticeLoginFailed", map[string]any{"error": error})
+}
+
+// RestoreDefaults says "Restore Defaults"
+// in the language the app shows.
+func RestoreDefaults() string { return In(i18n.Locale()).RestoreDefaults() }
+
+// RestoreDefaults says "Restore Defaults"
+// in the language of msgs.
+func (msgs Messages) RestoreDefaults() string {
+	return Catalog.Format(msgs.locale, "restoreDefaults", nil)
+}
+
+// RestoreDefaultsNote says "Restore the first captured picture for each display, not factory settings"
+// in the language the app shows.
+func RestoreDefaultsNote() string { return In(i18n.Locale()).RestoreDefaultsNote() }
+
+// RestoreDefaultsNote says "Restore the first captured picture for each display, not factory settings"
+// in the language of msgs.
+func (msgs Messages) RestoreDefaultsNote() string {
+	return Catalog.Format(msgs.locale, "restoreDefaultsNote", nil)
 }

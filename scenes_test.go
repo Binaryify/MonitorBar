@@ -9,7 +9,7 @@ func TestSavedScene(t *testing.T) {
 	s := p.s
 	s.soft, s.warmth = 45, 35
 	tt := newTester(p)
-	if err := tt.Click("把当前亮度和色温保存为场景"); err != nil { // the save chip, by its label
+	if err := tt.Click("将所有支持的画面设置保存为场景"); err != nil { // the save chip, by its label
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -91,7 +91,7 @@ func TestSavedScenesLimit(t *testing.T) {
 		t.Errorf("%d saved scenes, want at most %d", n, maxSavedScenes)
 	}
 	tt := newTester(p)
-	if tt.Click("把当前亮度和色温保存为场景") == nil {
+	if tt.Click("将所有支持的画面设置保存为场景") == nil {
 		t.Error("the save chip shows with no room left")
 	}
 }
