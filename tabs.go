@@ -128,10 +128,14 @@ func (p *panel) scenes(c *ui.Context) {
 	card(c, func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			icon(c, "sparkles").FontSize(13)
-			ui.Text(c, locales.Scenes()).FontSize(12).FontWeight(600).Grow(1)
-			ui.Text(c, locales.ScenesNote()).FontSize(10).TextColor(muted)
+			ui.Text(c, locales.Scenes()).FontSize(12).FontWeight(600).Grow(1).Tooltip(locales.ScenesNote())
+			reset := chip(c.Key("restore-defaults"), false).Height(20).Label(locales.RestoreDefaults()).Tooltip(locales.RestoreDefaultsNote()).Disabled(s.prefs.display(s.monitor.Key).Baseline == nil)
+			reset.Children(func() { ui.Text(c, locales.RestoreDefaults()).FontSize(10).SingleLine() })
+			if reset.Clicked() {
+				s.each(s.restoreDefaults)
+			}
 			if len(s.prefs.SavedScenes) < maxSavedScenes {
-				save := chip(c.Key("save-scene"), false).Size(22, 20).Label(locales.SceneSaveLabel()).Tooltip(locales.SceneSaveLabel())
+				save := chip(c.Key("save-scene"), false).Size(22, 20).Label(locales.SceneSaveLabel()).Tooltip(locales.SceneSaveLabel()).Disabled(s.probingDDC)
 				save.Children(func() { icon(c, "plus").FontSize(10) })
 				if save.Clicked() {
 					s.saveScene()

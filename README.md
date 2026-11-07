@@ -41,12 +41,16 @@ MonitorBar 只在 REDMI 显示器 G Pro 27U 2026 上测试过，不保证在你�
 - **接管键盘亮度、音量键**（macOS，高级选项）：打开后不按 fn，直接用键盘上的亮度键调外接显示器；声音输出到显示器时，音量键调它的音量。需要在「隐私与安全性 → 辅助功能」中允许 MonitorBar；MacBook 内屏的亮度键照常生效，开启「跟随内屏亮度」时亮度键交给跟随功能。
 - **跟随内屏亮度**（MacBook + 支持 DDC/CI 的外接显示器）：内屏开启 macOS 自动亮度时，外接显示器的背光随之平滑调节，可设定外接亮度范围；手动调整会保留到内屏亮度下次变化。
 - **多显示器**：接了两台及以上显示器时，面板顶部可以切换要管理的显示器，每台各自记住亮度、色温和局域网遥控；打开「同步」后，亮度、色温、场景、音量、静音和切换输入源（含快捷键）同时作用于所有显示器，适合两台显示器一起切到另一台电脑。两台同型号的澎湃 OS 显示器无法自动区分，配对不对时在「⋯ → 局域网遥控」里改。
-- **自定义场景**：点「场景」卡片右上角的「+」，把当前亮度和色温保存成场景（最多 8 个），在「画面 → 我的场景」中重命名或删除；自动切换的白天、夜晚场景也可以选自定义场景。
+- **自定义场景**：点「场景」卡片右上角的「+」，把当前亮度、色温及支持的对比度、锐度和 RGB 增益保存成场景（最多 8 个），在「画面 → 我的场景」中重命名或删除；自动切换的白天、夜晚场景也可以选自定义场景。
 - **自动切换**：在「画面」里打开后，到了设定的白天、夜晚开始时间就自动切换到对应场景（默认 07:00「日间」、19:00「夜间」，场景可选）。只在时段交替时切换，中途的手动调整会保留到下一次交替。
 - **自动更新**：定期检查 GitHub 上的新版本，在面板底部提示，一键下载并重启；更新包经签名校验，只下载变化的部分。
 - 显示器不支持的功能不会出现在界面上。
 - **多语言**：简体中文和英文，跟随系统语言，也可在「⋯ → 语言」中切换。文案在 `locales/` 下（`en.json` 为源语言），改动后运行 `go tool mygo generate` 重新生成 `catalog_gen.go`。
 - 单个可执行文件，无 webview，空闲时不占 CPU；中文界面，深色主题。
+
+### 完整画面场景
+
+自定义场景保存硬件亮度、软件调暗、色温，以及显示器支持的 DDC/CI 对比度、锐度和 RGB 增益；输入源、音量、分辨率与刷新率不受影响。每台显示器首次成功完整读取 DDC/CI 时保存独立的持久基线。内置场景保留预设亮度与色温，其余画面控制恢复基线。「恢复默认」恢复整份基线，并非显示器出厂重置。同步开启时，每台显示器恢复自己的基线；未记录或不支持的控制保持不变。旧版场景仍可使用。
 
 ### 普通显示器也能用
 
@@ -149,6 +153,9 @@ git tag v1.0.0 && git push origin v1.0.0
 ## English
 
 REDMI monitors do not support DDC/CI, so the usual tools (MonitorControl, BetterDisplay, Lunar) cannot switch their inputs. They run HyperOS, though, whose LAN remote API can, DP and USB-C included. MonitorBar manages an external monitor from the macOS menu bar or the Windows notification area. It switches inputs and changes volume over the LAN remote API of Xiaomi HyperOS monitors, or over DDC/CI on monitors that support it (backlight and picture controls too), dims and warms the picture through the gamma table, switches resolutions and refresh rates, and tracks screen time. Monitors with neither HyperOS nor DDC/CI work too, with fewer features: dimming, color temperature, scenes, resolutions and screen time still work, while input switching, volume and hardware backlight do not. It is one Go codebase built with [mygo](https://mygo.egoist.dev/), drawing native UI on both platforms; the Windows build cross-compiles from a Mac. See [Development](#开发) for build commands.
+
+
+Custom scenes save hardware brightness, software dimming, warmth, and supported DDC/CI contrast, sharpness and RGB gains. Input, volume, resolution and refresh rate stay unchanged. Each display keeps a persistent baseline from its first successful full DDC/CI read. Built-in scenes use their preset brightness and warmth and restore the other picture controls from that baseline. **Restore Defaults** restores the complete captured baseline, not factory settings. With sync enabled, each display restores its own baseline. Missing or unsupported controls stay unchanged, and older scenes remain compatible.
 
 ## 许可证
 

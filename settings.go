@@ -53,9 +53,10 @@ type settings struct {
 
 // displaySettings are a display's picture and the LAN remote paired with it.
 type displaySettings struct {
-	SoftBrightness float64 `json:"softBrightness"`
-	Warmth         float64 `json:"warmth"`
-	NetworkHost    string  `json:"networkHost,omitempty"` // noLink when the user chose none
+	SoftBrightness float64          `json:"softBrightness"`
+	Warmth         float64          `json:"warmth"`
+	Baseline       *pictureSnapshot `json:"baseline,omitempty"`
+	NetworkHost    string           `json:"networkHost,omitempty"` // noLink when the user chose none
 }
 
 // noLink pairs a display with no LAN remote, by the user's choice.
@@ -77,11 +78,12 @@ func (s *settings) display(key string) *displaySettings {
 
 // savedScene is the picture as it was when the user saved it.
 type savedScene struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Backlight *float64 `json:"backlight,omitempty"` // DDC/CI %, absent when it reached none
-	Soft      float64  `json:"softBrightness"`
-	Warmth    float64  `json:"warmth"`
+	Picture   *pictureSnapshot `json:"picture,omitempty"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Backlight *float64         `json:"backlight,omitempty"` // DDC/CI %, absent when it reached none
+	Soft      float64          `json:"softBrightness"`
+	Warmth    float64          `json:"warmth"`
 }
 
 // dataDir is where MonitorBar keeps its files.
@@ -124,4 +126,14 @@ func (s *settings) volumeStep() float64 {
 		return shortcutStep
 	}
 	return float64(s.VolumeStep)
+}
+
+// pictureSnapshot owns its values. Controls are normalized percentages so scenes
+// can safely follow sync-display semantics across different hardware ranges.
+// A missing entry means leave that control alone, never an inferred default.
+type pictureSnapshot struct {
+	Backlight *float64         `json:"backlight,omitempty"`
+	Soft      float64          `json:"softBrightness"`
+	Warmth    float64          `json:"warmth"`
+	Controls  map[byte]float64 `json:"controls,omitempty"`
 }

@@ -22,7 +22,7 @@ import (
 	"github.com/binaryify/MonitorBar/locales"
 )
 
-// scene sets brightness and warmth at once. Its id is kept in the
+// scene restores a picture snapshot or a built-in preset. Its id is kept in the
 // settings, for switching by the time.
 type scene struct {
 	id                 string
@@ -81,14 +81,14 @@ func (s *store) sceneByID(id string) scene {
 
 // saveScene keeps the current picture as a new scene.
 func (s *store) saveScene() {
-	if len(s.prefs.SavedScenes) >= maxSavedScenes {
+	if s.probingDDC || len(s.prefs.SavedScenes) >= maxSavedScenes {
 		return
 	}
 	n := 1
 	for slices.ContainsFunc(s.prefs.SavedScenes, func(sc savedScene) bool { return sc.ID == fmt.Sprintf("saved-%d", n) }) {
 		n++
 	}
-	sc := savedScene{ID: fmt.Sprintf("saved-%d", n), Name: locales.SceneCustomName(n), Soft: s.soft, Warmth: s.warmth}
+	sc := savedScene{Picture: s.picture(), ID: fmt.Sprintf("saved-%d", n), Name: locales.SceneCustomName(n), Soft: s.soft, Warmth: s.warmth}
 	if s.hasBrightness {
 		sc.Backlight = new(s.brightness)
 	}
@@ -165,8 +165,9 @@ type output struct {
 	switchingTo string // the mode the LAN remote is switching the monitor to
 
 	// The software picture, through the gamma table.
-	soft   float64 // gamma %, 20...100
-	warmth float64 // 0...100
+	beforeScene *pictureSnapshot // software state before scenes, if DDC has not answered yet
+	soft        float64          // gamma %, 20...100
+	warmth      float64          // 0...100
 
 	link      *mitv.Link // the display's LAN remote, nil until found
 	inputs    []mitv.Source
@@ -281,9 +282,16 @@ func (s *store) setWarmth(percent float64) {
 	s.applyGamma()
 }
 
-// apply sets a scene's brightness, on the backlight when DDC/CI reaches it,
-// and its warmth.
+// apply restores supported picture controls, leaving non-picture settings alone.
 func (s *store) apply(sc scene) {
+	s.rememberSoftware()
+	if sc.saved != nil && sc.saved.Picture != nil {
+		s.restorePicture(sc.saved.Picture)
+		return
+	}
+	if sc.saved == nil {
+		s.restoreControls(s.prefs.display(s.monitor.Key).Baseline)
+	}
 	backlight, soft := sc.levels(s.hasBrightness)
 	if s.hasBrightness && backlight >= 0 {
 		s.setBrightness(backlight)
@@ -293,6 +301,12 @@ func (s *store) apply(sc scene) {
 }
 
 func (s *store) isActive(sc scene) bool {
+	if sc.saved != nil && sc.saved.Picture != nil {
+		return s.matchesPicture(sc.saved.Picture)
+	}
+	if sc.saved == nil && !s.matchesControls(s.prefs.display(s.monitor.Key).Baseline) {
+		return false
+	}
 	backlight, soft := sc.levels(s.hasBrightness)
 	return math.Abs(s.soft-soft) < 1 && math.Abs(s.warmth-sc.warmth) < 1 &&
 		(!s.hasBrightness || backlight < 0 || math.Abs(s.brightness-backlight) < 1)
@@ -733,20 +747,20 @@ type ddcReading struct {
 }
 
 // readDDC reads the values the panel shows; with all, also the inputs the
-// capability string lists and which picture controls answer. It blocks.
+// capability string lists and rebuilds supported controls. It blocks.
 func readDDC(d *display.DDC, model string, all bool) ddcReading {
 	r := ddcReading{values: map[byte][2]int{}, refreshed: !all}
 	codes := []byte{display.VCPBrightness, display.VCPVolume, display.VCPInput}
+	for _, c := range controlCatalog {
+		codes = append(codes, c.code)
+	}
 	if all {
-		for _, c := range controlCatalog {
-			codes = append(codes, c.code)
-		}
 		for _, id := range display.ParseCapabilities(d.Capabilities())[display.VCPInput] {
 			r.inputs = append(r.inputs, mitv.Source{ID: id, Name: display.InputNameFor(model, id)})
 		}
 	}
 	for _, code := range codes {
-		if v, max, ok := d.Get(code); ok && max > 0 {
+		if v, max, ok := d.Get(code); ok && max > 0 && (code == display.VCPInput || (v >= 0 && v <= max)) {
 			r.values[code] = [2]int{v, max}
 		}
 	}
@@ -781,10 +795,14 @@ func (s *store) applyDDC(r ddcReading) {
 		s.applyInput(r)
 		for i := range s.controls {
 			if v, ok := r.values[s.controls[i].code]; ok {
-				s.controls[i].value = float64(v[0])
+				s.controls[i].value, s.controls[i].max = float64(v[0]), v[1]
 			}
 		}
 		return
+	}
+	s.hasBrightness = false
+	if _, ok := r.values[display.VCPBrightness]; ok {
+		s.hasBrightness = true
 	}
 	s.ddcInputs = r.inputs
 	s.applyInput(r)
@@ -794,6 +812,7 @@ func (s *store) applyDDC(r ddcReading) {
 			s.controls = append(s.controls, control{code: c.code, label: c.label, value: float64(v[0]), max: v[1]})
 		}
 	}
+	s.captureBaseline(r)
 }
 
 // applyInput highlights the input the monitor reports, when it is one of
@@ -831,7 +850,8 @@ func (s *store) refreshDDC() {
 
 // setBrightness sets the backlight over DDC/CI.
 func (s *store) setBrightness(percent float64) {
-	s.brightness = percent
+	s.brightness = min(max(percent, 0), 100)
+	percent = s.brightness
 	s.setDDC(display.VCPBrightness, percent)
 }
 
@@ -848,6 +868,7 @@ func (s *store) setDDC(code byte, percent float64) {
 }
 
 func (s *store) setControl(i int) {
+	s.controls[i].value = min(max(s.controls[i].value, 0), float64(s.controls[i].max))
 	if s.ddc != nil {
 		s.ddc.Set(s.controls[i].code, int(math.Round(s.controls[i].value)))
 	}

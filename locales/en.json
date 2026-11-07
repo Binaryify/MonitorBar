@@ -81,12 +81,12 @@
   },
   "volume": "Display Volume",
   "scenes": "Scenes",
-  "scenesNote": "Brightness + color temperature",
+  "scenesNote": "Complete picture",
   "sceneDay": "Day",
   "sceneReading": "Reading",
   "sceneMovie": "Movie",
   "sceneNight": "Night",
-  "sceneSaveLabel": "Save the current brightness and color temperature as a scene",
+  "sceneSaveLabel": "Save all supported picture controls as a scene",
   "sceneCustomName": "Scene {n}",
   "@sceneCustomName": {
     "placeholders": {
@@ -339,5 +339,7 @@
         "type": "String"
       }
     }
-  }
+  },
+  "restoreDefaults": "Restore Defaults",
+  "restoreDefaultsNote": "Restore the first captured picture for each display, not factory settings"
 }
