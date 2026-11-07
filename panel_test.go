@@ -109,7 +109,7 @@ func TestTabs(t *testing.T) {
 	tt := newTester(p)
 	for tab, want := range map[string][]string{
 		"画面":   {"色温", "标准", "恢复软件调整"},
-		"分辨率":  {"刷新率", "160 Hz", "HiDPI（清晰）", "渲染 3840×2160", "标准"},
+		"分辨率":  {"刷新率", "160 Hz", "HiDPI（清晰）", "渲染 5120×2880", "标准"},
 		"屏幕时间": {"今日亮屏", "3 小时 0 分", "最近 7 天", "日均 5 小时 30 分"},
 	} {
 		if err := tt.Click(tab); err != nil {

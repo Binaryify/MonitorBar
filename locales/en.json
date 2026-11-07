@@ -231,6 +231,15 @@
       }
     }
   },
+  "modesShowMore": "{count, plural, one {Show # more mode} other {Show # more modes}}",
+  "@modesShowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modesShowLess": "Show less",
   "modeRendered": "Rendered at {width, number, ::group-off}×{height, number, ::group-off}",
   "@modeRendered": {
     "placeholders": {
@@ -311,6 +320,7 @@
     }
   },
   "noticeUpdateFailed": "The update failed. Try again later, or download it from GitHub",
+  "noticeModeApplying": "Switching display mode…",
   "noticeModeRejected": "Couldn't switch: the display refused the mode",
   "noticeModeSwitched": "Switched to {mode} · {rate} Hz",
   "@noticeModeSwitched": {

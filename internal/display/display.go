@@ -88,7 +88,7 @@ func (m Mode) HiDPI() bool { return m.PixelWidth > m.Width }
 
 // SizeKey identifies the resolution, whatever the refresh rate.
 func (m Mode) SizeKey() string {
-	return fmt.Sprintf("%dx%d@%v", m.Width, m.Height, m.HiDPI())
+	return fmt.Sprintf("%dx%d@%dx%d", m.Width, m.Height, m.PixelWidth, m.PixelHeight)
 }
 
 func (m Mode) ID() string    { return fmt.Sprintf("%s/%d", m.SizeKey(), m.RefreshRate) }
@@ -115,7 +115,13 @@ func Resolutions(modes []Mode, hiDPI bool, refreshRate int) []Mode {
 		if a.Width != b.Width {
 			return b.Width - a.Width
 		}
-		return b.Height - a.Height
+		if a.Height != b.Height {
+			return b.Height - a.Height
+		}
+		if a.PixelWidth != b.PixelWidth {
+			return b.PixelWidth - a.PixelWidth
+		}
+		return b.PixelHeight - a.PixelHeight
 	})
 	return out
 }
