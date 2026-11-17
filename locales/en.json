@@ -351,5 +351,15 @@
     }
   },
   "restoreDefaults": "Restore Defaults",
-  "restoreDefaultsNote": "Restore the first captured picture for each display, not factory settings"
+  "restoreDefaultsNote": "Restore the first captured picture for each display, not factory settings",
+  "mirrorSwitch": "Input-aware mirroring (macOS)",
+  "mirrorDisplay": "Enable for this display",
+  "mirrorNote": "Switch using these buttons or your input shortcuts: Windows mirrors the MacBook; Mac restores the saved layout. Manual monitor switching needs reliable DDC. A dock may return stale replies: if Windows cannot be confirmed, use Switch to Mac when returning.",
+  "mirrorReadFailed": "Cannot read input on this cable. Automatic return requires readable DDC; switch back to Mac or disable mirroring.",
+  "mirrorFailed": "Could not safely change or restore the display layout.",
+  "mirrorMac": "Mac input",
+  "mirrorWindows": "Windows input",
+  "mirrorReturnMac": "Switch to Mac",
+  "mirrorGoWindows": "Switch to Windows",
+  "mirrorRestoreLayout": "Restore extended layout"
 }

@@ -8,6 +8,7 @@ import (
 	"math"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -112,6 +113,7 @@ func (s *store) deleteScene(id string) {
 // fields are read and written on the main thread only: network work runs in
 // goroutines and hands its results back through post.
 type store struct {
+	mirrorClosing bool
 	// The display the panel shows and its fields are of: on and every
 	// make another one it for a while, so actions work on each the same.
 	*output
@@ -159,6 +161,9 @@ type store struct {
 
 // output is a display and what reaches it.
 type output struct {
+	mirror      *display.InputMirror
+	sourceBusy  bool
+	switchBusy  bool
 	monitor     display.Monitor
 	modes       []display.Mode
 	current     display.Mode
@@ -395,6 +400,9 @@ func (s *store) resetSoftware() {
 
 func (s *store) applyGamma() {
 	s.dirty = true
+	if s.mirrorSuspended() {
+		return
+	}
 	err := s.setGamma(s.soft/100, s.warmth/100)
 	switch {
 	case errors.Is(err, display.ErrGammaLimited):
@@ -413,7 +421,34 @@ func (s *store) sources() []mitv.Source {
 	if s.link != nil {
 		return s.inputs
 	}
-	return s.ddcInputs
+	if s.monitor.Builtin {
+		return s.ddcInputs
+	}
+	inputs := slices.Clone(s.ddcInputs)
+	add := func(id int) {
+		if id <= 0 || id > 255 || slices.ContainsFunc(inputs, func(src mitv.Source) bool { return src.ID == id }) {
+			return
+		}
+		inputs = append(inputs, mitv.Source{ID: id, Name: display.InputNameFor(s.monitor.Name, id)})
+	}
+	p := s.prefs.display(s.monitor.Key)
+	if p.InputMirroring {
+		add(p.macInput())
+		add(p.winInput())
+	}
+	// Recorded input shortcuts are explicit user configuration. Keep them
+	// usable when a dock temporarily fails to return the MCCS capability list.
+	if len(s.ddcInputs) == 0 && (s.ddc != nil || p.InputMirroring) {
+		for id, keys := range s.prefs.Shortcuts {
+			if keys != "" && strings.HasPrefix(id, inputShortcutPrefix) {
+				if n, err := strconv.Atoi(strings.TrimPrefix(id, inputShortcutPrefix)); err == nil {
+					add(n)
+				}
+			}
+		}
+	}
+	slices.SortFunc(inputs, func(a, b mitv.Source) int { return a.ID - b.ID })
+	return inputs
 }
 
 // inputChannel names how inputs are switched, for the inputs card.
@@ -588,6 +623,62 @@ func (s *store) lanByHost(host string) *lanMonitor {
 }
 
 func (s *store) selectInput(src mitv.Source) {
+	o := s.output
+	pref := s.prefs.display(o.monitor.Key)
+	if s.prefs.InputMirroring && pref.InputMirroring {
+		if o.switchBusy {
+			return
+		}
+		if o.mirror == nil {
+			o.mirror = o.monitor.InputMirror(pref.macInput(), pref.winInput())
+		}
+		if o.mirror != nil {
+			// CoreGraphics may deliver display callbacks reentrantly while arming.
+			// Protect the existing DDC channel before entering that transaction.
+			o.switchBusy = true
+			newlyArmed := false
+			if src.ID == pref.winInput() {
+				newlyArmed = !o.mirror.OwnsLayout()
+				if err := o.mirror.Prearm(); err != nil {
+					o.switchBusy = false
+					s.finishMirror(err)
+					return
+				}
+			}
+			o.switchBusy = true
+			d, link := o.ddc, o.link
+			go func() {
+				success := false
+				if link != nil {
+					success = link.Select(src.ID) == nil
+				} else if d != nil {
+					success = d.Write(display.VCPInput, src.ID)
+				}
+				s.post(func() {
+					o.switchBusy = false
+					if s.mirrorClosing {
+						return
+					}
+					s.on(o, func() {
+						if !success {
+							if newlyArmed {
+								s.finishMirror(o.mirror.Stop())
+							}
+							s.notice = locales.NoticeInputFailed(src.Name)
+							return
+						}
+						if src.ID == pref.macInput() {
+							o.mirror.RequestMac()
+						}
+						s.input = src.ID
+						// A successful write is not proof of the physical source. Polling
+						// confirms HDMI1 before restoring; inactive-cable failure stays safe.
+					})
+				})
+			}()
+			return
+		}
+	}
 	s.input = src.ID
 	link := s.link
 	if link == nil {
@@ -853,6 +944,7 @@ func (s *store) refreshDDC() {
 
 // setBrightness sets the backlight over DDC/CI.
 func (s *store) setBrightness(percent float64) {
+	s.easing = false // manual edits stay until a new built-in reading
 	s.brightness = min(max(percent, 0), 100)
 	percent = s.brightness
 	s.setDDC(display.VCPBrightness, percent)
@@ -936,11 +1028,11 @@ func parseClock(text string, fallback int) time.Time {
 // MacBook's display to follow, and a backlight to set over DDC/CI.
 func (s *store) canFollow() bool { return s.hasBuiltin && s.hasBrightness }
 
-// followTick runs every second. A change of the built-in display's
+// followTick runs at 30 Hz. A change of the built-in display's
 // brightness sets a new target, which the backlight eases toward; between
 // changes, a manual change of the backlight stays.
 func (s *store) followTick(builtin func() (float64, bool)) {
-	if !s.prefs.FollowBuiltin || !s.canFollow() {
+	if !s.prefs.FollowBuiltin || !s.canFollow() || s.mirrorSuspended() {
 		return
 	}
 	b, ok := builtin()
@@ -964,9 +1056,7 @@ func (s *store) followTick(builtin func() (float64, bool)) {
 	} else {
 		s.brightness = next
 	}
-	if next == s.followTarget {
-		s.easing = false
-	}
+	s.easing = next != s.followTarget
 }
 
 // followChanged restarts following from the built-in display's brightness.
@@ -981,18 +1071,14 @@ func followTarget(builtin, lo, hi float64) float64 {
 	return lo + (hi-lo)*min(max(builtin, 0), 1)
 }
 
-// easeToward moves a third of the way to the target each second, at least
-// one point, landing on it: a few seconds for any change, without jumps.
+const followInterval = time.Second / 30
+
+// Exponential easing settles within about half a second without a minimum step.
 func easeToward(current, target float64) float64 {
-	d := target - current
-	if math.Abs(d) <= 1 {
+	if math.Abs(target-current) <= 1 {
 		return target
 	}
-	step := d * 0.3
-	if math.Abs(step) < 1 {
-		step = math.Copysign(1, d)
-	}
-	return current + step
+	return current + (target-current)*(1-math.Exp(-float64(followInterval)/float64(100*time.Millisecond)))
 }
 
 // MARK: Updates
@@ -1144,6 +1230,10 @@ func (s *store) refreshDisplay() {
 		outputs = append(outputs, o)
 	}
 	for _, o := range s.outputs {
+		if !slices.Contains(outputs, o) && o.mirror != nil && o.mirror.Suspended() {
+			outputs = append(outputs, o)
+			continue
+		}
 		if !slices.Contains(outputs, o) && o.ddc != nil {
 			go o.ddc.Close()
 		}
@@ -1176,7 +1266,7 @@ func (s *store) displaysChanged() {
 	added := false
 	for _, o := range s.outputs {
 		m, ok := previous[o]
-		if !ok || m != o.monitor {
+		if !ok || (m != o.monitor && !((o.switchBusy || (o.mirror != nil && o.mirror.Suspended())) && m.Key == o.monitor.Key)) {
 			s.on(o, s.probeDDC)
 		}
 		added = added || !ok

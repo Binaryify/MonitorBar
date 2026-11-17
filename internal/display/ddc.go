@@ -36,7 +36,9 @@ type ddcTransport interface {
 // dragged slider doesn't queue up slow writes.
 type DDC struct {
 	t       ddcTransport
-	mu      sync.Mutex
+	mu      sync.Mutex // pending queue only; never held during bus I/O
+	ioMu    sync.Mutex
+	closed  bool
 	pending map[byte]int
 	wake    chan struct{}
 	done    chan struct{}
@@ -61,14 +63,24 @@ func (m Monitor) OpenDDC() (*DDC, error) {
 // Get reads a VCP code: its value, its maximum, and whether the monitor
 // supports it.
 func (d *DDC) Get(code byte) (value, maximum int, ok bool) {
-	d.mu.Lock() // one transaction on the bus at a time
-	defer d.mu.Unlock()
+	if d.isClosed() {
+		return 0, 0, false
+	}
+	d.ioMu.Lock()
+	defer d.ioMu.Unlock()
+	if d.isClosed() {
+		return 0, 0, false
+	}
 	return d.t.read(code)
 }
 
 // Set queues a write of a VCP code.
 func (d *DDC) Set(code byte, value int) {
 	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		return
+	}
 	d.pending[code] = value
 	d.mu.Unlock()
 	select {
@@ -79,19 +91,46 @@ func (d *DDC) Set(code byte, value int) {
 
 // Capabilities is the monitor's MCCS capability string, "" if unreadable.
 func (d *DDC) Capabilities() string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	if d.isClosed() {
+		return ""
+	}
+	d.ioMu.Lock()
+	defer d.ioMu.Unlock()
+	if d.isClosed() {
+		return ""
+	}
 	return d.t.capabilities()
 }
 
 // Close stops the writer and releases the monitor.
-func (d *DDC) Close() {
-	close(d.done)
+func (d *DDC) isClosed() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	return d.closed
+}
+func (d *DDC) Close() {
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		return
+	}
+	d.closed = true
+	close(d.done)
+	d.mu.Unlock()
+	d.ioMu.Lock()
+	defer d.ioMu.Unlock()
 	d.t.close()
 }
 
+// Write performs a checked transaction for source switching, off the UI thread.
+func (d *DDC) Write(code byte, value int) bool {
+	d.ioMu.Lock()
+	defer d.ioMu.Unlock()
+	if d.isClosed() {
+		return false
+	}
+	return d.t.write(code, value)
+}
 func (d *DDC) writer() {
 	for {
 		select {
@@ -100,7 +139,15 @@ func (d *DDC) writer() {
 		case <-d.wake:
 		}
 		for {
+			// Acquire the bus BEFORE selecting a pending value: a blocked bus must
+			// not leave an obsolete brightness waiting in the writer's local variable.
+			d.ioMu.Lock()
 			d.mu.Lock()
+			if d.closed {
+				d.mu.Unlock()
+				d.ioMu.Unlock()
+				return
+			}
 			var code byte
 			var value int
 			found := false
@@ -108,13 +155,17 @@ func (d *DDC) writer() {
 				found = true
 				break
 			}
+			if found {
+				delete(d.pending, code)
+			}
+			d.mu.Unlock()
+			if found {
+				d.t.write(code, value)
+			}
+			d.ioMu.Unlock()
 			if !found {
-				d.mu.Unlock()
 				break
 			}
-			delete(d.pending, code)
-			d.t.write(code, value)
-			d.mu.Unlock()
 		}
 	}
 }

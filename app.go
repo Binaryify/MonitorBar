@@ -83,6 +83,7 @@ func (a *app) ready(show bool) {
 		}
 	}()
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		a.s.stopMirrors()
 		a.s.save()
 		display.RestoreGamma()
 		for _, o := range a.s.outputs {
@@ -105,13 +106,35 @@ func (a *app) ready(show bool) {
 				if a.s.syncMediaKeys(); denied != a.s.mediaKeysDenied {
 					a.s.redraw()
 				}
-				if a.s.prefs.FollowBuiltin {
-					a.s.every(func() { a.s.followTick(display.BuiltinBrightness) })
+
+			})
+		}
+	}()
+	go func() {
+		for range time.Tick(followInterval) {
+			mygo.RunOnMain(func() {
+				if !a.s.prefs.FollowBuiltin {
+					return
+				}
+				b, ok := display.BuiltinBrightness() // once for all outputs
+				changed := false
+				a.s.every(func() {
+					old, soft := a.s.brightness, a.s.soft
+					a.s.followTick(func() (float64, bool) { return b, ok })
+					changed = changed || old != a.s.brightness || soft != a.s.soft
+				})
+				if changed {
 					a.s.redraw()
 				}
 			})
 		}
 	}()
+	go func() {
+		for range time.Tick(time.Second) {
+			mygo.RunOnMain(a.s.pollInputs)
+		}
+	}()
+
 	go func() { // a newer version: soon after launch, then every few hours
 		time.Sleep(10 * time.Second)
 		for {

@@ -1420,3 +1420,103 @@ func RestoreDefaultsNote() string { return In(i18n.Locale()).RestoreDefaultsNote
 func (msgs Messages) RestoreDefaultsNote() string {
 	return Catalog.Format(msgs.locale, "restoreDefaultsNote", nil)
 }
+
+// MirrorSwitch says "Input-aware mirroring (macOS)"
+// in the language the app shows.
+func MirrorSwitch() string { return In(i18n.Locale()).MirrorSwitch() }
+
+// MirrorSwitch says "Input-aware mirroring (macOS)"
+// in the language of msgs.
+func (msgs Messages) MirrorSwitch() string {
+	return Catalog.Format(msgs.locale, "mirrorSwitch", nil)
+}
+
+// MirrorDisplay says "Enable for this display"
+// in the language the app shows.
+func MirrorDisplay() string { return In(i18n.Locale()).MirrorDisplay() }
+
+// MirrorDisplay says "Enable for this display"
+// in the language of msgs.
+func (msgs Messages) MirrorDisplay() string {
+	return Catalog.Format(msgs.locale, "mirrorDisplay", nil)
+}
+
+// MirrorNote says "Switch using these buttons or your input shortcuts: Windows mirrors the MacBook; Mac restores the saved layout. Manua…"
+// in the language the app shows.
+func MirrorNote() string { return In(i18n.Locale()).MirrorNote() }
+
+// MirrorNote says "Switch using these buttons or your input shortcuts: Windows mirrors the MacBook; Mac restores the saved layout. Manua…"
+// in the language of msgs.
+func (msgs Messages) MirrorNote() string {
+	return Catalog.Format(msgs.locale, "mirrorNote", nil)
+}
+
+// MirrorReadFailed says "Cannot read input on this cable. Automatic return requires readable DDC; switch back to Mac or disable mirroring."
+// in the language the app shows.
+func MirrorReadFailed() string { return In(i18n.Locale()).MirrorReadFailed() }
+
+// MirrorReadFailed says "Cannot read input on this cable. Automatic return requires readable DDC; switch back to Mac or disable mirroring."
+// in the language of msgs.
+func (msgs Messages) MirrorReadFailed() string {
+	return Catalog.Format(msgs.locale, "mirrorReadFailed", nil)
+}
+
+// MirrorFailed says "Could not safely change or restore the display layout."
+// in the language the app shows.
+func MirrorFailed() string { return In(i18n.Locale()).MirrorFailed() }
+
+// MirrorFailed says "Could not safely change or restore the display layout."
+// in the language of msgs.
+func (msgs Messages) MirrorFailed() string {
+	return Catalog.Format(msgs.locale, "mirrorFailed", nil)
+}
+
+// MirrorMac says "Mac input"
+// in the language the app shows.
+func MirrorMac() string { return In(i18n.Locale()).MirrorMac() }
+
+// MirrorMac says "Mac input"
+// in the language of msgs.
+func (msgs Messages) MirrorMac() string {
+	return Catalog.Format(msgs.locale, "mirrorMac", nil)
+}
+
+// MirrorWindows says "Windows input"
+// in the language the app shows.
+func MirrorWindows() string { return In(i18n.Locale()).MirrorWindows() }
+
+// MirrorWindows says "Windows input"
+// in the language of msgs.
+func (msgs Messages) MirrorWindows() string {
+	return Catalog.Format(msgs.locale, "mirrorWindows", nil)
+}
+
+// MirrorReturnMac says "Switch to Mac"
+// in the language the app shows.
+func MirrorReturnMac() string { return In(i18n.Locale()).MirrorReturnMac() }
+
+// MirrorReturnMac says "Switch to Mac"
+// in the language of msgs.
+func (msgs Messages) MirrorReturnMac() string {
+	return Catalog.Format(msgs.locale, "mirrorReturnMac", nil)
+}
+
+// MirrorGoWindows says "Switch to Windows"
+// in the language the app shows.
+func MirrorGoWindows() string { return In(i18n.Locale()).MirrorGoWindows() }
+
+// MirrorGoWindows says "Switch to Windows"
+// in the language of msgs.
+func (msgs Messages) MirrorGoWindows() string {
+	return Catalog.Format(msgs.locale, "mirrorGoWindows", nil)
+}
+
+// MirrorRestoreLayout says "Restore extended layout"
+// in the language the app shows.
+func MirrorRestoreLayout() string { return In(i18n.Locale()).MirrorRestoreLayout() }
+
+// MirrorRestoreLayout says "Restore extended layout"
+// in the language of msgs.
+func (msgs Messages) MirrorRestoreLayout() string {
+	return Catalog.Format(msgs.locale, "mirrorRestoreLayout", nil)
+}
