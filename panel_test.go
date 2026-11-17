@@ -662,6 +662,7 @@ func TestInputShortcut(t *testing.T) {
 		t.Fatal("HDMI2's shortcut is not bound")
 	}
 	s.link = nil // DDC/CI lists other inputs: the shortcut does nothing
+	s.ddcInputs = []mitv.Source{{ID: 15, Name: "DP"}}
 	s.input = 0
 	bound.run(s)
 	if s.input != 0 {

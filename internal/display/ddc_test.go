@@ -2,6 +2,7 @@ package display
 
 import (
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -24,36 +25,46 @@ func TestParseCapabilities(t *testing.T) {
 }
 
 // fakeTransport records writes, to check that Set keeps only the latest value.
-type fakeTransport struct{ writes [][2]int }
+type fakeTransport struct {
+	mu     sync.Mutex
+	writes [][2]int
+	closes int
+}
 
 func (f *fakeTransport) read(code byte) (int, int, bool) { return 50, 100, true }
 func (f *fakeTransport) write(code byte, v int) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.writes = append(f.writes, [2]int{int(code), v})
 	return true
 }
 func (f *fakeTransport) capabilities() string { return "" }
-func (f *fakeTransport) close()               {}
+func (f *fakeTransport) close()               { f.mu.Lock(); defer f.mu.Unlock(); f.closes++ }
 
 func TestSetCoalesces(t *testing.T) {
 	f := &fakeTransport{}
 	d := &DDC{t: f, pending: map[byte]int{}, wake: make(chan struct{}, 1), done: make(chan struct{})}
-	d.mu.Lock() // hold the writer back while the slider "moves"
+
+	d.ioMu.Lock() // block bus I/O, not producers
 	go d.writer()
 	for v := range 50 {
-		d.pending[VCPBrightness] = v
+		d.Set(VCPBrightness, v)
 	}
-	d.mu.Unlock()
 	d.Set(VCPBrightness, 80)
+	d.ioMu.Unlock()
 	for range 200 {
 		time.Sleep(5 * time.Millisecond)
-		d.mu.Lock()
+		f.mu.Lock()
 		n := len(f.writes)
-		d.mu.Unlock()
+		f.mu.Unlock()
 		if n > 0 {
 			break
 		}
 	}
+
 	d.Close()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.writes) != 1 || f.writes[0] != [2]int{int(VCPBrightness), 80} {
 		t.Errorf("writes = %v, want one write of 80", f.writes)
 	}
@@ -78,5 +89,33 @@ func TestUniqueKeys(t *testing.T) {
 		if m.Key != want[i] {
 			t.Errorf("key %d: %q, want %q", i, m.Key, want[i])
 		}
+	}
+}
+
+func TestCloseIgnoresLateProducers(t *testing.T) {
+	f := &fakeTransport{}
+	d := &DDC{t: f, pending: map[byte]int{}, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	go d.writer()
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Go(func() {
+			for range 30 {
+				d.Set(VCPBrightness, 40)
+				d.Get(VCPInput)
+				d.Capabilities()
+			}
+			d.Close()
+		})
+	}
+	wg.Wait()
+	d.Close()
+	d.Set(VCPBrightness, 80)
+	if _, _, ok := d.Get(VCPInput); ok {
+		t.Fatal("read after close")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closes != 1 {
+		t.Fatalf("closed %d times", f.closes)
 	}
 }

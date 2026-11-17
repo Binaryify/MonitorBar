@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 )
 
 // settings are the choices kept between launches, in a JSON file.
 type settings struct {
+	extra          map[string]json.RawMessage
+	InputMirroring bool `json:"inputMirroring,omitempty"`
 	// The first display's picture and LAN remote, as before each display
 	// had its own: the defaults of a display seen for the first time.
 	SoftBrightness float64 `json:"softBrightness"` // gamma %, 20...100
@@ -53,6 +57,10 @@ type settings struct {
 
 // displaySettings are a display's picture and the LAN remote paired with it.
 type displaySettings struct {
+	extra          map[string]json.RawMessage
+	InputMirroring bool             `json:"inputMirroring,omitempty"`
+	MacInput       int              `json:"macInput,omitempty"`
+	WindowsInput   int              `json:"windowsInput,omitempty"`
 	SoftBrightness float64          `json:"softBrightness"`
 	Warmth         float64          `json:"warmth"`
 	Baseline       *pictureSnapshot `json:"baseline,omitempty"`
@@ -136,4 +144,79 @@ type pictureSnapshot struct {
 	Soft      float64          `json:"softBrightness"`
 	Warmth    float64          `json:"warmth"`
 	Controls  map[byte]float64 `json:"controls,omitempty"`
+}
+
+func (d *displaySettings) macInput() int {
+	if d.MacInput == 0 {
+		return 0x11
+	}
+	return d.MacInput
+}
+func (d *displaySettings) winInput() int {
+	if d.WindowsInput == 0 {
+		return 0x12
+	}
+	return d.WindowsInput
+}
+
+// Preserve fields introduced by local or newer builds
+// without inspecting or migrating user data. Known fields retain normal defaults.
+func unknownSettings(data []byte, known any) map[string]json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return nil
+	}
+	typ := reflect.TypeOf(known)
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		if name == "" {
+			name = field.Name
+		}
+		delete(fields, name)
+	}
+	return fields
+}
+func marshalSettings(known any, extra map[string]json.RawMessage) ([]byte, error) {
+	data, err := json.Marshal(known)
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range extra {
+		if _, ok := fields[key]; !ok {
+			fields[key] = value
+		}
+	}
+	return json.Marshal(fields)
+}
+func (s *settings) UnmarshalJSON(data []byte) error {
+	type plain settings
+	if err := json.Unmarshal(data, (*plain)(s)); err != nil {
+		return err
+	}
+	s.extra = unknownSettings(data, plain{})
+	return nil
+}
+func (s settings) MarshalJSON() ([]byte, error) {
+	type plain settings
+	return marshalSettings(plain(s), s.extra)
+}
+func (d *displaySettings) UnmarshalJSON(data []byte) error {
+	type plain displaySettings
+	if err := json.Unmarshal(data, (*plain)(d)); err != nil {
+		return err
+	}
+	d.extra = unknownSettings(data, plain{})
+	return nil
+}
+func (d displaySettings) MarshalJSON() ([]byte, error) {
+	type plain displaySettings
+	return marshalSettings(plain(d), d.extra)
 }

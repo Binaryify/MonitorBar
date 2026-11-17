@@ -193,6 +193,7 @@ func (p *panel) picture(c *ui.Context) {
 	if s.canFollow() {
 		p.followBuiltin(c)
 	}
+	p.inputMirroring(c)
 	p.autoSwitch(c)
 	if warmth := s.warmth; (sliderCard{key: "warmth", title: locales.Warmth(), caption: locales.WarmthNote(), icon: "thermometer",
 		value: &warmth, lo: 0, hi: 100, step: 5, format: func(v float64) string {
@@ -596,4 +597,74 @@ func weekday(day string) string {
 		return locales.Today()
 	}
 	return i18n.FormatDate(i18n.Locale(), t, i18n.DateOptions{Skeleton: "EEE"})
+}
+
+func (p *panel) inputMirroring(c *ui.Context) {
+	if runtime.GOOS != "darwin" || p.s.monitor.Builtin {
+		return
+	}
+	if p.s.ddc == nil && p.s.link == nil && !p.s.prefs.display(p.s.monitor.Key).InputMirroring {
+		return
+	}
+
+	s := p.s
+	card(c, func() {
+		if ui.Switch(c.Key("input-mirror-global"), &s.prefs.InputMirroring).Label(locales.MirrorSwitch()).Changed() {
+			s.dirty = true
+			s.pollInputs()
+		}
+		ui.Text(c, locales.MirrorNote()).FontSize(10).TextColor(muted)
+		if !s.prefs.InputMirroring {
+			return
+		}
+		d := s.prefs.display(s.monitor.Key)
+		if ui.Switch(c.Key("input-mirror-display"), &d.InputMirroring).Label(locales.MirrorDisplay()).Changed() {
+			s.dirty = true
+			s.pollInputs()
+		}
+		if !d.InputMirroring {
+			codes := []int{0x11, 0x12, 0x0f, 0x10, 0x13, 0x19, 0x1b, 0x1c}
+			labels := make([]string, len(codes))
+			for i, v := range codes {
+				labels[i] = fmt.Sprintf("%s (0x%02X)", display.InputName(v), v)
+			}
+			choose := func(key, label string, value *int, effective int) {
+				index := slices.Index(codes, effective)
+				chosen := ""
+				if index >= 0 {
+					chosen = labels[index]
+				}
+				if ui.Select(c.Key(key), &chosen, labels).Label(label).Changed() {
+					index = slices.Index(labels, chosen)
+					if index < 0 {
+						return
+					}
+					*value = codes[index]
+					s.dirty = true
+					if s.mirror == nil || !s.mirror.Suspended() {
+						s.mirror = nil
+					}
+				}
+			}
+			choose("mirror-mac", locales.MirrorMac(), &d.MacInput, d.macInput())
+			choose("mirror-win", locales.MirrorWindows(), &d.WindowsInput, d.winInput())
+		}
+		ui.Textf(c, "Mac: %s (0x%02X) · Windows: %s (0x%02X)", display.InputName(d.macInput()), d.macInput(), display.InputName(d.winInput()), d.winInput()).FontSize(10).TextColor(muted)
+		if d.InputMirroring {
+			ui.Row(c).Gap(6).Children(func() {
+				if chipText(c.Key("mirror-go-mac"), locales.MirrorReturnMac(), false) {
+					s.switchInput(d.macInput())
+				}
+				if chipText(c.Key("mirror-go-windows"), locales.MirrorGoWindows(), false) {
+					s.switchInput(d.winInput())
+				}
+			})
+			reset := chip(c.Key("mirror-restore"), false).Height(24).Label(locales.MirrorRestoreLayout())
+			reset.Children(func() { ui.Text(c, locales.MirrorRestoreLayout()).FontSize(10) })
+			if reset.Clicked() && s.mirror != nil {
+				s.finishMirror(s.mirror.Stop())
+			}
+		}
+
+	})
 }

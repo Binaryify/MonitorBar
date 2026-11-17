@@ -91,6 +91,7 @@ func load() {
 			return h
 		}
 		cg := lib("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+		registerMirror(cg)
 		cf := lib("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
 		io := lib("/System/Library/Frameworks/IOKit.framework/IOKit")
 		lib("/System/Library/Frameworks/AppKit.framework/AppKit")
@@ -151,12 +152,13 @@ func symbolValue(lib uintptr, name string) uintptr {
 // display alone when none is external.
 func Targets() []Monitor {
 	load()
-	var ids [16]uint32
-	var n uint32
-	cgGetActiveDisplayList(uint32(len(ids)), &ids[0], &n)
+	ids, err := onlineIDs()
+	if err != nil {
+		return nil
+	}
 	main := cgMainDisplayID()
 	var external []uint32
-	for _, d := range ids[:n] {
+	for _, d := range ids {
 		if cgDisplayIsBuiltin(d) == 0 {
 			external = append(external, d)
 		}

@@ -136,5 +136,15 @@
   "noticeSwitching": "显示器正在切换到 {mode}，屏幕会黑几秒",
   "noticeLoginFailed": "登录项设置失败：{error}",
   "restoreDefaults": "恢复默认",
-  "restoreDefaultsNote": "恢复每台显示器首次记录的画面，而非出厂设置"
+  "restoreDefaultsNote": "恢复每台显示器首次记录的画面，而非出厂设置",
+  "mirrorSwitch": "输入源联动镜像（macOS）",
+  "mirrorDisplay": "为此显示器启用",
+  "mirrorNote": "用下方按钮或输入源快捷键切换：Windows 时镜像内屏，切回 Mac 后恢复布局。显示器实体按钮切换依赖可靠 DDC；扩展坞可能返回旧读数，无法确认 Windows 时请用「切回 Mac」恢复。",
+  "mirrorReadFailed": "当前线缆无法读取输入源，无法自动确认返回。请切回 Mac 或关闭联动镜像。",
+  "mirrorFailed": "无法安全更改或恢复显示器排列。",
+  "mirrorMac": "Mac 输入源",
+  "mirrorWindows": "Windows 输入源",
+  "mirrorReturnMac": "切回 Mac",
+  "mirrorGoWindows": "切到 Windows",
+  "mirrorRestoreLayout": "恢复扩展布局"
 }
