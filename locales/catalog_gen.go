@@ -879,14 +879,24 @@ func (msgs Messages) VolumeStep() string {
 	return Catalog.Format(msgs.locale, "volumeStep", nil)
 }
 
-// MediaKeys says "Use the keyboard's brightness and volume keys"
+// BrightnessKeys says "Use the keyboard's brightness keys"
 // in the language the app shows.
-func MediaKeys() string { return In(i18n.Locale()).MediaKeys() }
+func BrightnessKeys() string { return In(i18n.Locale()).BrightnessKeys() }
 
-// MediaKeys says "Use the keyboard's brightness and volume keys"
+// BrightnessKeys says "Use the keyboard's brightness keys"
 // in the language of msgs.
-func (msgs Messages) MediaKeys() string {
-	return Catalog.Format(msgs.locale, "mediaKeys", nil)
+func (msgs Messages) BrightnessKeys() string {
+	return Catalog.Format(msgs.locale, "brightnessKeys", nil)
+}
+
+// VolumeKeys says "Use the keyboard's volume keys"
+// in the language the app shows.
+func VolumeKeys() string { return In(i18n.Locale()).VolumeKeys() }
+
+// VolumeKeys says "Use the keyboard's volume keys"
+// in the language of msgs.
+func (msgs Messages) VolumeKeys() string {
+	return Catalog.Format(msgs.locale, "volumeKeys", nil)
 }
 
 // MediaKeysNote says "Advanced: F1/F2 without fn set the external brightness, and F10/F11/F12 mute it and set its volume while the sound pl…"

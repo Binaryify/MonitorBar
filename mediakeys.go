@@ -13,7 +13,7 @@ import (
 func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 	switch k {
 	case mediakeys.BrightnessUp, mediakeys.BrightnessDown:
-		if s.monitor.Builtin || s.prefs.FollowBuiltin && s.canFollow() {
+		if !s.prefs.BrightnessKeys || s.monitor.Builtin || s.prefs.FollowBuiltin && s.canFollow() {
 			return nil, false // no external display, or it follows the built-in one already
 		}
 		delta := float64(shortcutStep)
@@ -22,20 +22,18 @@ func (s *store) mediaKey(k mediakeys.Key) (step func(), pass bool) {
 		}
 		// A MacBook keeps its own brightness keys while the external display follows.
 		return func() { s.each(func() { s.stepBrightness(delta) }); s.adjusted(hudBrightness) }, s.hasBuiltin
-	case mediakeys.VolumeUp, mediakeys.VolumeDown:
-		if s.volumeKeyTarget() == nil || s.audioRoute() == display.OtherAudio {
+	case mediakeys.VolumeUp, mediakeys.VolumeDown, mediakeys.Mute:
+		if !s.prefs.VolumeKeys || s.volumeKeyTarget() == nil || s.audioRoute() == display.OtherAudio {
 			return nil, false // the sound plays elsewhere, at macOS's volume
+		}
+		if k == mediakeys.Mute {
+			return func() { s.toggleMute(); s.adjusted(hudVolume) }, false
 		}
 		delta := s.prefs.volumeStep()
 		if k == mediakeys.VolumeDown {
 			delta = -delta
 		}
 		return func() { s.each(func() { s.stepVolume(delta) }); s.adjusted(hudVolume) }, false
-	case mediakeys.Mute:
-		if s.volumeKeyTarget() == nil || s.audioRoute() == display.OtherAudio {
-			return nil, false
-		}
-		return func() { s.toggleMute(); s.adjusted(hudVolume) }, false
 	}
 	return nil, false
 }
@@ -56,7 +54,7 @@ func (s *store) onMediaKey(k mediakeys.Key, down bool) (take bool) {
 // runs every second, as the user grants the permission in System Settings
 // (or loses it to an update signed anew).
 func (s *store) syncMediaKeys() {
-	want := s.prefs.MediaKeys && s.bindShortcuts && mediakeys.Supported
+	want := (s.prefs.BrightnessKeys || s.prefs.VolumeKeys) && s.bindShortcuts && mediakeys.Supported
 	switch {
 	case !want:
 		mediakeys.Stop()
@@ -73,8 +71,8 @@ func (s *store) syncMediaKeys() {
 
 // setMediaKeys turns taking the keys on or off, asking macOS for the
 // permission the first time.
-func (s *store) setMediaKeys(on bool) {
-	s.prefs.MediaKeys, s.dirty = on, true
+func (s *store) setMediaKeys(pref *bool, on bool) {
+	*pref, s.dirty = on, true
 	if on && s.bindShortcuts && !mediakeys.Trusted() {
 		mediakeys.RequestAccess()
 	}
