@@ -42,8 +42,9 @@ type settings struct {
 	// for none.
 	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 	// Taking the keyboard's brightness and volume keys (macOS).
-	MediaKeys  bool `json:"mediaKeys"`
-	VolumeStep int  `json:"volumeStep,omitempty"`
+	BrightnessKeys bool `json:"brightnessKeys"`
+	VolumeKeys     bool `json:"volumeKeys"`
+	VolumeStep     int  `json:"volumeStep,omitempty"`
 	// Showing the level under the menu bar icon as the keys change it.
 	HUD bool `json:"hud"`
 	// The language chosen in the panel, "" to follow the system's.
@@ -100,6 +101,14 @@ func loadSettings() *settings {
 		FollowMin: 10, FollowMax: 100, HUD: true,
 		path: filepath.Join(dataDir(), "settings.json")}
 	if data, err := os.ReadFile(s.path); err == nil {
+		// Older versions had one switch for both groups. Use it as the
+		// default, so an explicit per-group choice always wins.
+		var legacy struct {
+			MediaKeys bool `json:"mediaKeys"`
+		}
+		if json.Unmarshal(data, &legacy) == nil {
+			s.BrightnessKeys, s.VolumeKeys = legacy.MediaKeys, legacy.MediaKeys
+		}
 		_ = json.Unmarshal(data, s)
 	}
 	// Before 1.7 the scenes were kept by their Chinese names.

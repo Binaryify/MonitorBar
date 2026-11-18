@@ -44,7 +44,7 @@ func testPanel(t *testing.T) (*panel, *[2]float64) {
 			inputs: []mitv.Source{{ID: 23, Name: "HDMI1"}, {ID: 24, Name: "HDMI2"}, {ID: 29, Name: "DP"}, {ID: 30, Name: "USB-C"}},
 			volume: 80, hasVolume: true, deviceVolume: 80,
 		},
-		prefs:      &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100},
+		prefs:      &settings{SoftBrightness: 100, FollowMin: 10, FollowMax: 100, BrightnessKeys: true, VolumeKeys: true},
 		tracker:    usage.Open(filepath.Join(t.TempDir(), "usage.json")),
 		redraw:     func() {},
 		setGamma:   func(b, w float64) error { gamma = [2]float64{b, w}; return nil },
@@ -531,6 +531,24 @@ func TestMediaKey(t *testing.T) {
 	s.audioRoute = func() display.AudioRoute { return display.OtherAudio }
 	if step, _ := s.mediaKey(mediakeys.VolumeUp); step != nil {
 		t.Error("a key took the volume of sound playing elsewhere")
+	}
+}
+
+func TestIndependentMediaKeys(t *testing.T) {
+	p, _ := testPanel(t)
+	s := p.s
+	for _, brightness := range []bool{false, true} {
+		for _, volume := range []bool{false, true} {
+			s.prefs.BrightnessKeys, s.prefs.VolumeKeys = brightness, volume
+			for key, want := range map[mediakeys.Key]bool{
+				mediakeys.BrightnessUp: brightness, mediakeys.BrightnessDown: brightness,
+				mediakeys.VolumeUp: volume, mediakeys.VolumeDown: volume, mediakeys.Mute: volume,
+			} {
+				if got := s.onMediaKey(key, false); got != want {
+					t.Errorf("brightness=%t volume=%t: took key %v = %t, want %t", brightness, volume, key, got, want)
+				}
+			}
+		}
 	}
 }
 

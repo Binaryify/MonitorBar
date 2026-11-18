@@ -303,13 +303,17 @@ func (p *panel) shortcuts(c *ui.Context) {
 // volume keys, which needs the Accessibility permission.
 func (p *panel) mediaKeys(c *ui.Context) {
 	s := p.s
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.MediaKeys()).FontSize(11).Grow(1)
-		on := s.prefs.MediaKeys
-		if ui.Switch(c.Key("media-keys"), &on).Label(locales.MediaKeys()).Changed() {
-			s.setMediaKeys(on)
-		}
-	})
+	keySwitch := func(key, label string, pref *bool) {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, label).FontSize(11).Grow(1)
+			on := *pref
+			if ui.Switch(c.Key(key), &on).Label(label).Changed() {
+				s.setMediaKeys(pref, on)
+			}
+		})
+	}
+	keySwitch("brightness-keys", locales.BrightnessKeys(), &s.prefs.BrightnessKeys)
+	keySwitch("volume-keys", locales.VolumeKeys(), &s.prefs.VolumeKeys)
 	if !s.mediaKeysDenied {
 		ui.Text(c, locales.MediaKeysNote()).
 			FontSize(10).TextColor(muted)
